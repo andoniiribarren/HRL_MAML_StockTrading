@@ -1,0 +1,45 @@
+{
+    "DOW_30" : [
+        "AXP",
+        "AMGN",
+        "AAPL",
+        "BA",
+        "CAT",
+        "CSCO",
+        "CVX",
+        "GS",
+        "HD",
+        "HON",
+        "IBM",
+        "NVDA",
+        "JNJ",
+        "KO",
+        "JPM",
+        "MCD",
+        "MMM",
+        "MRK",
+        "MSFT",
+        "NKE",
+        "PG",
+        "TRV",
+        "UNH",
+        "CRM",
+        "VZ",
+        "V",
+        "AMZN",
+        "WMT",
+        "DIS",
+        "SHW"
+    ],
+
+    "CRYPTO_7" : [
+        "BTC-USD",
+        "ETH-USD",
+        "BNB-USD",
+        "SOL-USD",
+        "XRP-USD",
+        "ADA-USD",
+        "DOGE-USD"
+    ]
+    
+}

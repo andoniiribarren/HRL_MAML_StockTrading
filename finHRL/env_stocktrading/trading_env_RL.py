@@ -33,12 +33,11 @@ class StockTradingEnv(gym.Env):
         self,
         df: pd.DataFrame,
         stock_dim: int,
-        hmax: int,                      # TODO quitar porque esto no lo quiero así
+        hmax: int,
         initial_amount: int,
         num_stock_shares: list[int],
         buy_cost_pct: list[float],
         sell_cost_pct: list[float],
-        reward_scaling: float,
         state_space: int,
         action_space: int,
         tech_indicator_list: list[str],
@@ -59,7 +58,6 @@ class StockTradingEnv(gym.Env):
         self.initial_amount = initial_amount  # get the initial cash
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
-        self.reward_scaling = reward_scaling
         self.state_space = state_space
         self.action_space = action_space
         self.tech_indicator_list = tech_indicator_list
@@ -310,6 +308,7 @@ class StockTradingEnv(gym.Env):
                 actions[index] = self._buy_stock(index, actions[index])
 
             self.actions_memory.append(actions)
+            #print(actions)
 
             # state: s -> s+1
             self.day += 1

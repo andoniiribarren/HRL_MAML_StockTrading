@@ -17,8 +17,11 @@ class baseRLAgent:
         self,
         model_name,
         policy="MlpPolicy",
-        # policy_kwargs=None, # TODO: poner args customizables después
-        #model_kwargs=None, # TODO: poner args customizables después
+        learning_rate = 5e-5,
+        gamma = 0.99,
+        max_grad_norm = 0.5,
+        n_steps = 256,
+        ent_coef = 0.001,
         verbose=1,
         seed=None
     ):
@@ -30,11 +33,13 @@ class baseRLAgent:
         return MODELS[model_name](
             policy=policy,
             env=self.env,
-            learning_rate = 3e-4,
+            learning_rate = learning_rate,
+            gamma = gamma,
+            max_grad_norm = max_grad_norm,
+            n_steps = n_steps,
+            ent_coef = ent_coef,
             verbose=verbose,
-            #policy_kwargs=policy_kwargs,
             seed=seed,
-            #**model_kwargs,
         )
     
     @staticmethod
@@ -58,17 +63,18 @@ class baseRLAgent:
         return model
     
     @staticmethod
-    def predict(model, environment, deterministic=True):
+    def predict_RL(model, environment, deterministic=True):
         """make a prediction and get results"""
+        print("Starting prediction...")
         test_env, test_obs = environment.get_sb_env()
         account_memory = None  # This help avoid unnecessary list creation
         actions_memory = None  # optimize memory consumption
         # state_memory=[] #add memory pool to store states
 
         test_env.reset()
-        max_steps = len(environment.df.index.unique()) - 1
+        max_steps = len(environment.df.dayorder.unique()) - 1
 
-        for i in range(len(environment.df.index.unique())):
+        for i in range(len(environment.df.dayorder.unique())):
             action, _states = model.predict(test_obs, deterministic=deterministic)
             # account_memory = test_env.env_method(method_name="save_asset_memory")
             # actions_memory = test_env.env_method(method_name="save_action_memory")

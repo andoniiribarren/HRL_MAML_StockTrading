@@ -94,11 +94,11 @@ class hyperparams_opt_RL:
         )
 
     def objective(self, trial):
-        gamma = trial.suggest_float('gamma', 0.9, 0.999, log=True)
+        gamma = trial.suggest_float('gamma', 0.98, 0.999, log=True)
         max_grad_norm = trial.suggest_float('max_grad_norm', 0.3, 5, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [8, 16, 32, 64, 128, 256, 512, 1024])
-        learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
-        ent_coef = trial.suggest_float('ent_coef', 0.00000001, 0.1, log=True)
+        n_steps = trial.suggest_categorical("n_steps", [32, 64, 128, 256])
+        learning_rate = trial.suggest_float('learning_rate', 5e-5, 5e-4, log=True)
+        ent_coef = trial.suggest_float('ent_coef', 1e-5, 0.01, log=True)
 
         train_env = self.make_env(self.df_train)
         test_env  = self.make_env(self.df_test)

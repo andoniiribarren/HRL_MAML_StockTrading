@@ -39,7 +39,8 @@ class baseRLAgent:
             n_steps = n_steps,
             ent_coef = ent_coef,
             verbose=verbose,
-            seed=seed,
+            seed=seed, 
+            tensorboard_log="./logs/"
         )
     
     @staticmethod

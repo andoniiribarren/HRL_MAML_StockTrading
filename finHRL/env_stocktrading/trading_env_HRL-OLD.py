@@ -14,18 +14,6 @@ matplotlib.use("Agg")
 
 
 class StockTradingEnvHRL(gym.Env):
-    """
-    A stock trading environment for OpenAI gym
-
-    Parameters:
-        df (pandas.DataFrame): Dataframe containing data
-        hmax (int): Maximum cash to be traded in each trade per asset.
-        initial_amount (int): Amount of cash initially available
-        buy_cost_pct (float, array): Cost for buying shares, each index corresponds to each asset
-        sell_cost_pct (float, array): Cost for selling shares, each index corresponds to each asset
-        turbulence_threshold (float): Maximum turbulence allowed in market for purchases to occur. If exceeded, positions are liquidated
-        print_verbosity(int): When iterating (step), how often to print stats about state of env
-    """
 
     metadata = {"render.modes": ["human"]}
 
@@ -38,7 +26,8 @@ class StockTradingEnvHRL(gym.Env):
         num_stock_shares: list[int],
         buy_cost_pct: list[float],
         sell_cost_pct: list[float],
-        state_space: int,
+        state_space_manager: int,
+        state_space_worker: int,
         action_space: int,
         tech_indicator_list: list[str],
         make_plots: bool = False,
@@ -55,16 +44,24 @@ class StockTradingEnvHRL(gym.Env):
         self.stock_dim = stock_dim
         self.hmax = hmax
         self.num_stock_shares = num_stock_shares
-        self.initial_amount = initial_amount  # get the initial cash
+        self.initial_amount = initial_amount
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
-        self.state_space = state_space
+        self.state_space_manager = state_space_manager
+        self.state_space_worker = state_space_worker
         self.action_space = action_space
         self.tech_indicator_list = tech_indicator_list
-        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_space,))
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.state_space,) # state space = [balance, close prices_i, stock_shares_i, MACD_i, rsi30_i, cci30_i] 1 + stock_dim * 5
+
+        self.action_space_manager = spaces.MultiDiscrete([3] * self.action_space)
+        self.action_space_worker = spaces.Box(low=0, high=1, shape=(self.action_space,), dtype=np.float32)
+
+        self.observation_space_manager = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(self.state_space_manager,)
         )
+        self.observation_space_worker = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(self.state_space_worker,)
+        )
+
         self.data = self.df[self.df.dayorder == self.day]
         self.terminal = False
         self.make_plots = make_plots
@@ -308,7 +305,6 @@ class StockTradingEnvHRL(gym.Env):
                 actions[index] = self._buy_stock(index, actions[index])
 
             self.actions_memory.append(actions)
-            #print(actions)
 
             # state: s -> s+1
             self.day += 1
@@ -322,10 +318,10 @@ class StockTradingEnvHRL(gym.Env):
 
             self.asset_memory.append(end_total_asset)
             self.date_memory.append(self._get_date())
-            
+            # UPDATED self.reward = end_total_asset - begin_total_asset
             self.reward = np.log(end_total_asset / begin_total_asset)
             self.rewards_memory.append(self.reward)
-
+            # UPDATED self.reward = self.reward * self.reward_scaling
             self.state_memory.append(
                 self.state
             )  # add current state in state_recorder for each step

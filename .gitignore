@@ -2,3 +2,6 @@
 __pycache__/
 demo/results/
 hrlmamlenv/
+demo/logs/
+
+*.gitignore

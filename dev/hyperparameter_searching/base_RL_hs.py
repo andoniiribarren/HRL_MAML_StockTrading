@@ -12,9 +12,9 @@ import numpy as np
 import datetime
 
 
-from finHRL.agent.models import baseRLAgent
-from finHRL.env_stocktrading.trading_env_RL import StockTradingEnv
-from finHRL.preprocess.preprocessor import FeatureEngineer, YahooDownloader
+from src.agent.models import baseRLAgent
+from src.env_stocktrading.trading_env_RL import StockTradingEnv
+from src.preprocess.preprocessor import FeatureEngineer, YahooDownloader
 
 class hyperparams_opt_RL:
     def __init__(self,

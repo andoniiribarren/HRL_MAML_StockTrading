@@ -45,7 +45,7 @@ class baseRLAgent:
     
     @staticmethod
     def train_model(
-        model,
+        model: A2C | PPO | DDPG | TD3 | SAC,
         tb_log_name,
         total_timesteps=5000,
         callbacks: type[BaseCallback] = None,

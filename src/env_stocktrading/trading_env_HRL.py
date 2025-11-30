@@ -38,7 +38,8 @@ class StockTradingEnvHRL(gym.Env):
         num_stock_shares: list[int],
         buy_cost_pct: list[float],
         sell_cost_pct: list[float],
-        state_space: int,
+        state_space_M: int,
+        state_space_W:int,
         action_space: int,
         tech_indicator_list: list[str],
         make_plots: bool = False,
@@ -58,13 +59,36 @@ class StockTradingEnvHRL(gym.Env):
         self.initial_amount = initial_amount  # get the initial cash
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
-        self.state_space = state_space
+        self.state_space_M = state_space_M
+        self.state_space_W = state_space_W
         self.action_space = action_space
         self.tech_indicator_list = tech_indicator_list
+        
         self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_space,))
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.state_space,) # state space = [balance, close prices_i, stock_shares_i, MACD_i, rsi30_i, cci30_i] 1 + stock_dim * 5
-        )
+
+        full_state_space = 1 + 2 * self.stock_dim + len(self.tech_indicator_list) * self.stock_dim
+
+        self.observation_space = spaces.Dict({
+            "full_state": spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(full_state_space,), # 1 + 2 * stock_dim + len(INDICATORS) * stock_dim
+                dtype=np.float32,
+            ),
+            "manager": spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.state_space_M,), # stock_dim + len(INDICATORS) * stock_dim
+                dtype=np.float32,
+            ),
+            "worker": spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.state_space_W,), # 1+ 3 * stock_dim 
+                dtype=np.float32,
+            ),
+        })
+
         self.data = self.df[self.df.dayorder == self.day]
         self.terminal = False
         self.make_plots = make_plots
@@ -87,7 +111,7 @@ class StockTradingEnvHRL(gym.Env):
             self.initial_amount
             + np.sum(
                 np.array(self.num_stock_shares)
-                * np.array(self.state[1 : 1 + self.stock_dim])
+                * np.array(self.state['full_state'][1 : 1 + self.stock_dim])
             )
         ]  # the initial total asset is calculated by cash + sum (num_share_stock_i * price_stock_i)
         self.rewards_memory = []
@@ -205,17 +229,17 @@ class StockTradingEnvHRL(gym.Env):
             # print(f"Episode: {self.episode}")
             if self.make_plots:
                 self._make_plot()
-            end_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state['full_state'][0] + sum(
+                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
             )
             df_total_value = pd.DataFrame(self.asset_memory)
             tot_reward = (
-                self.state[0]
+                self.state['full_state'][0]
                 + sum(
-                    np.array(self.state[1 : (self.stock_dim + 1)])
+                    np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
                     * np.array(
-                        self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                        self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
                     )
                 )
                 - self.asset_memory[0]
@@ -279,18 +303,19 @@ class StockTradingEnvHRL(gym.Env):
             # logger.record("environment/total_cost", self.cost)
             # logger.record("environment/total_trades", self.trades)
 
-            return self.state, self.reward, self.terminal, False, {}
+            return self.state, self.reward, self.terminal, False, {} # TODO ALIGNMENT REWARD
 
         else:
             actions = actions * self.hmax  # actions initially is scaled between 0 to 1
             actions = actions.astype(
                 int
-            )  # convert into integer because we can't by fraction of shares
-            begin_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            )
+            begin_total_asset = self.state['full_state'][0] + sum(
+                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
             )
             # print("begin_total_asset:{}".format(begin_total_asset))
+            begin_prices = np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
 
             argsort_actions = np.argsort(actions)
             sell_index = argsort_actions[: np.where(actions < 0)[0].shape[0]]
@@ -315,10 +340,12 @@ class StockTradingEnvHRL(gym.Env):
             self.data = self.df[self.df.dayorder == self.day]
             self.state = self._update_state()
 
-            end_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state['full_state'][0] + sum(
+                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
             )
+
+            end_prices =  np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
 
             self.asset_memory.append(end_total_asset)
             self.date_memory.append(self._get_date())
@@ -330,7 +357,18 @@ class StockTradingEnvHRL(gym.Env):
                 self.state
             )  # add current state in state_recorder for each step
 
-        return self.state, self.reward, self.terminal, False, {}
+            # ALIGNMENT REWARD
+            price_change = end_prices - begin_prices
+            
+            rew_align = np.where(
+                actions == 0,
+                0.0,
+                np.sign(actions) * np.sign(price_change)
+            ).astype(np.float32)
+
+            info = {'rew_align': rew_align}
+
+        return self.state, self.reward, self.terminal, False, info
 
     def reset(
         self,
@@ -348,14 +386,14 @@ class StockTradingEnvHRL(gym.Env):
                 self.initial_amount
                 + np.sum(
                     np.array(self.num_stock_shares)
-                    * np.array(self.state[1 : 1 + self.stock_dim])
+                    * np.array(self.state['full_state'][1 : 1 + self.stock_dim])
                 )
             ]
         else:
-            previous_total_asset = self.previous_state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
+            previous_total_asset = self.previous_state['full_state'][0] + sum(
+                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
                 * np.array(
-                    self.previous_state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                    self.previous_state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
                 )
             )
             self.asset_memory = [previous_total_asset]
@@ -373,41 +411,52 @@ class StockTradingEnvHRL(gym.Env):
         return self.state, {}
 
     def render(self, mode="human", close=False):
-        return self.state
+        #return self.state
+        raise NotImplementedError()
 
     def _initiate_state(self):
         if self.initial:
             # For Initial State
             if len(self.df.tic.unique()) > 1:
                 # for multiple stock
-                state = (
-                    [self.initial_amount]
-                    + self.data.close.values.tolist()
-                    + self.num_stock_shares
-                    + sum(
-                        (
-                            self.data[tech].values.tolist()
-                            for tech in self.tech_indicator_list
+                state = {
+                    "full_state": (
+                        [self.initial_amount]               # balance inicial
+                        + self.data.close.values.tolist()   # Close prices i
+                        + self.num_stock_shares             # stock shares i
+                        + sum(
+                            (
+                                self.data[tech].values.tolist()
+                                for tech in self.tech_indicator_list    # Indicators i
+                            ),
+                            [],
+                        )
+                    ),
+                    'manager': self.data.close.values.tolist() + sum(
+                            (
+                                self.data[tech].values.tolist()
+                                for tech in self.tech_indicator_list
+                            ),
+                            [],
                         ),
-                        [],
-                    )
-                )  # [balance, close prices_i, stock_shares_i, MACD_i, rsi30_i, cci30_i, dx30_i, turbulences_i]
+
+                    'worker': [self.initial_amount]
+                            + self.data.close.values.tolist() 
+                            + self.num_stock_shares
+                            + [0] * self.stock_dim
+                }
+                
             else:
                 # for single stock
-                state = (
-                    [self.initial_amount]
-                    + [self.data.close]
-                    + [0] * self.stock_dim
-                    + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
-                )
+                raise ValueError("No implemented for single stock. Please, select more than one ticker.")
         else:
             # Using Previous State
             if len(self.df.tic.unique()) > 1:
                 # for multiple stock
-                state = (
-                    [self.previous_state[0]]
+                state = {'full_state' : (
+                    [self.previous_state['full_state'][0]]
                     + self.data.close.values.tolist()
-                    + self.previous_state[
+                    + self.previous_state['full_state'][
                         (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
                     ]
                     + sum(
@@ -417,43 +466,63 @@ class StockTradingEnvHRL(gym.Env):
                         ),
                         [],
                     )
-                )
+                ),
+                'manager': (self.data.close.values.tolist()
+                        + sum(
+                            (
+                                self.data[tech].values.tolist()
+                                for tech in self.tech_indicator_list
+                            ),
+                            [],
+                        )
+                    ),
+                'worker': (
+                        [self.previous_state['full_state'][0]]
+                        + self.data.close.values.tolist()
+                        + self.previous_state['full_state'][
+                            (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                        ]
+                    )
+                }
             else:
                 # for single stock
-                state = (
-                    [self.previous_state[0]]
-                    + [self.data.close]
-                    + self.previous_state[
-                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
-                    ]
-                    + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
-                )
+                raise ValueError("No implemented for single stock. Please, select more than one ticker.")
         return state
 
     def _update_state(self):
         if len(self.df.tic.unique()) > 1:
             # for multiple stock
-            state = (
-                [self.state[0]]
-                + self.data.close.values.tolist()
-                + list(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
-                + sum(
-                    (
-                        self.data[tech].values.tolist()
-                        for tech in self.tech_indicator_list
+            state = {'full_state': (
+                    [self.state['full_state'][0]]
+                    + self.data.close.values.tolist()
+                    + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                    + sum(
+                        (
+                            self.data[tech].values.tolist()
+                            for tech in self.tech_indicator_list
+                        ),
+                        [],
+                    )
+                ),
+                'manager': (self.data.close.values.tolist()
+                    + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                        + sum(
+                            (
+                                self.data[tech].values.tolist()
+                                for tech in self.tech_indicator_list
+                            ),
+                            [],
+                        )
                     ),
-                    [],
-                )
-            )
+                'worker': ([self.state['full_state'][0]]
+                        + self.data.close.values.tolist()
+                        + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                    )
+            }
 
         else:
             # for single stock
-            state = (
-                [self.state[0]]
-                + [self.data.close]
-                + list(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
-                + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
-            )
+            raise ValueError("No implemented for single stock. Please, select more than one ticker.")
 
         return state
 
@@ -488,10 +557,7 @@ class StockTradingEnvHRL(gym.Env):
             df_states.index = df_date.date
             # df_actions = pd.DataFrame({'date':date_list,'actions':action_list})
         else:
-            date_list = self.date_memory[:-1]
-            state_list = self.state_memory
-            df_states = pd.DataFrame({"date": date_list, "states": state_list})
-        # print(df_states)
+            raise ValueError("No implemented for single stock. Please, select more than one ticker.")
         return df_states
 
     def save_asset_memory(self):

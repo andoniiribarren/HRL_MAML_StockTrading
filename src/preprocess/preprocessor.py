@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from stockstats import StockDataFrame as Sdf
-from finHRL import config
+from src import config
 import yfinance as yf
 
 # TODO s

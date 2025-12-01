@@ -83,6 +83,6 @@ hrl_train_env = StockTradingEnvHRL(
 )
 
 
-model = HRLforTrading(env=hrl_train_env)
+model = HRLforTrading(env=hrl_train_env, stock_dim=stock_dimension)
 n_episodes = 10
 trained_model = model.train_HRL_model()

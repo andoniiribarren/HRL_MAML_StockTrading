@@ -17,6 +17,7 @@ class HRLforTrading():
     def __init__(
         self,
         env: gym.Env,
+        stock_dim: int,
         manager_kwargs=None,
         worker_kwargs=None,
         initial_manager_timesteps: int = 2000,
@@ -32,12 +33,16 @@ class HRLforTrading():
         self.n_alt_cycles = n_alt_cycles
         self.initial_cycle_steps = initial_cycle_steps
         self.dism_factor = dism_factor
+        self.stock_dim = stock_dim
 
         self.env = env
 
         # Apply obs transformations
         self.env_M = FilterObservation(self.env, filter_keys=["manager"])
         self.env_W = FilterObservation(self.env, filter_keys=["worker"])
+
+        self.env_M.action_space = spaces.MultiDiscrete([3] * self.stock_dim)
+        self.env_W.action_space = spaces.Box(low=0, high=1, shape=(stock_dim,))
         # TODO ME FALTA ACTION WRAPPER
 
         self.manager = PPO(
@@ -114,13 +119,20 @@ class HRLforTrading():
 
                 # Generar obs para el WORKER
                 actions_M_np = actions_M_raw.cpu().numpy()
+                
                 actions_M = actions_M_np - 1
                 actions_M = np.squeeze(actions_M, axis=0) # Quitar dimensión extra
 
-                obs_W = np.concatenate([obs_W_raw, actions_M], axis=-1)
+                obs_W_raw = np.array(obs_W_raw, dtype=np.float32)
 
+                #obs_W = np.concatenate([obs_W_raw, actions_M], axis=-1)
+                obs_W_raw[-self.stock_dim:] = actions_M
+
+                print("DEBUG 1: ", obs_W_raw.shape)
+                print("DEBUG 2: ", actions_M.shape)
                 with th.no_grad():
-                    actions_W, _ = self.worker.predict(obs_W, deterministic=False)
+                    obs_W_dict = {"worker": obs_W_raw}
+                    actions_W, _ = self.worker.predict(obs_W_dict, deterministic=False)
 
                 actions_combined = actions_M * actions_W
                 

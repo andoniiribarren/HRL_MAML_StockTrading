@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from stockstats import StockDataFrame as Sdf
-from src import config
+import config_training
 import yfinance as yf
 
 # TODO s
@@ -23,6 +23,7 @@ import yfinance as yf
 #
 # 6- Ver tb si es necesario incluir turbulence
 
+
 class YahooDownloader:
     """
     Class to download stock data from Yahoo Finance.
@@ -30,7 +31,7 @@ class YahooDownloader:
     Attributes
     ----------
         start_date : str
-            start date of the data 
+            start date of the data
         end_date : str
             end date of the data
         ticker_list : list
@@ -51,11 +52,11 @@ class YahooDownloader:
     def fetch_data(self, auto_adjust=True) -> pd.DataFrame:
         """
         Fetches data from Yahoo API
-        
+
         Parameters
         ----------
             auto_adjust: bool
-                Adjust all OHLC automatically to avoid price gaps resulting from splits or dividends. 
+                Adjust all OHLC automatically to avoid price gaps resulting from splits or dividends.
 
         Returns
         -------
@@ -86,9 +87,9 @@ class YahooDownloader:
             raise ValueError("no data is fetched.")
 
         data_df = data_df.reset_index()
-        
+
         try:
-            # Convert column names 
+            # Convert column names
             data_df.rename(
                 columns={
                     "Date": "date",
@@ -105,13 +106,13 @@ class YahooDownloader:
 
         except NotImplementedError:
             print("the features are not supported currently")
-        
+
         # Create day of the week column (monday = 0)
         data_df["day"] = data_df["date"].dt.dayofweek
-        
+
         # Convert date to standard string format
         data_df["date"] = data_df.date.apply(lambda x: x.strftime("%Y-%m-%d"))
-        
+
         # Drop missing data
         data_df = data_df.dropna()
         data_df = data_df.reset_index(drop=True)
@@ -120,6 +121,7 @@ class YahooDownloader:
         data_df = data_df.sort_values(by=["date", "tic"]).reset_index(drop=True)
 
         return data_df
+
 
 class FeatureEngineer:
     """Provides methods for preprocessing the stock price data
@@ -145,7 +147,7 @@ class FeatureEngineer:
     def __init__(
         self,
         use_technical_indicator=True,
-        tech_indicator_list=config.INDICATORS,
+        tech_indicator_list=config_training.INDICATORS,
         use_vix=False,
         use_turbulence=False,
         user_defined_feature=False,

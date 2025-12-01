@@ -39,7 +39,7 @@ class StockTradingEnvHRL(gym.Env):
         buy_cost_pct: list[float],
         sell_cost_pct: list[float],
         state_space_M: int,
-        state_space_W:int,
+        state_space_W: int,
         action_space: int,
         tech_indicator_list: list[str],
         make_plots: bool = False,
@@ -63,31 +63,39 @@ class StockTradingEnvHRL(gym.Env):
         self.state_space_W = state_space_W
         self.action_space = action_space
         self.tech_indicator_list = tech_indicator_list
-        
+
         self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_space,))
 
-        full_state_space = 1 + 2 * self.stock_dim + len(self.tech_indicator_list) * self.stock_dim
+        full_state_space = (
+            1 + 2 * self.stock_dim + len(self.tech_indicator_list) * self.stock_dim
+        )
 
-        self.observation_space = spaces.Dict({
-            "full_state": spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(full_state_space,), # 1 + 2 * stock_dim + len(INDICATORS) * stock_dim
-                dtype=np.float32,
-            ),
-            "manager": spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(self.state_space_M,), # stock_dim + len(INDICATORS) * stock_dim
-                dtype=np.float32,
-            ),
-            "worker": spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(self.state_space_W,), # 1+ 3 * stock_dim 
-                dtype=np.float32,
-            ),
-        })
+        self.observation_space = spaces.Dict(
+            {
+                "full_state": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(
+                        full_state_space,
+                    ),  # 1 + 2 * stock_dim + len(INDICATORS) * stock_dim
+                    dtype=np.float32,
+                ),
+                "manager": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(
+                        self.state_space_M,
+                    ),  # stock_dim + len(INDICATORS) * stock_dim
+                    dtype=np.float32,
+                ),
+                "worker": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self.state_space_W,),  # 1+ 3 * stock_dim
+                    dtype=np.float32,
+                ),
+            }
+        )
 
         self.data = self.df[self.df.dayorder == self.day]
         self.terminal = False
@@ -111,7 +119,7 @@ class StockTradingEnvHRL(gym.Env):
             self.initial_amount
             + np.sum(
                 np.array(self.num_stock_shares)
-                * np.array(self.state['full_state'][1 : 1 + self.stock_dim])
+                * np.array(self.state["full_state"][1 : 1 + self.stock_dim])
             )
         ]  # the initial total asset is calculated by cash + sum (num_share_stock_i * price_stock_i)
         self.rewards_memory = []
@@ -127,27 +135,30 @@ class StockTradingEnvHRL(gym.Env):
     def _sell_stock(self, index, action):
         def _do_sell_normal():
             if (
-                self.state[index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to sell, for simlicity we just add it in techical index
-                # if self.state[index + 1] > 0: # if we use price<0 to denote a stock is unable to trade in that day, the total asset calculation may be wrong for the price is unreasonable
-                # Sell only if the price is > 0 (no missing data in this particular date)
-                # perform sell action based on the sign of the action
-                if self.state[index + self.stock_dim + 1] > 0:
+                self.state["full_state"][index + 2 * self.stock_dim + 1] != True
+            ):  # check if the stock is able to sell
+                if self.state["full_state"][index + self.stock_dim + 1] > 0:
                     # Sell only if current asset is > 0
                     sell_num_shares = min(
-                        abs(action), self.state[index + self.stock_dim + 1]
+                        abs(action),
+                        self.state["full_state"][index + self.stock_dim + 1],
                     )
                     sell_amount = (
-                        self.state[index + 1]
+                        self.state["full_state"][index + 1]
                         * sell_num_shares
                         * (1 - self.sell_cost_pct[index])
                     )
                     # update balance
-                    self.state[0] += sell_amount
+                    self.state["full_state"][0] += sell_amount
+                    self.state["worker"][0] += sell_amount
 
-                    self.state[index + self.stock_dim + 1] -= sell_num_shares
+                    # Update number of stocks
+                    self.state["full_state"][
+                        index + self.stock_dim + 1
+                    ] -= sell_num_shares
+                    self.state["worker"][index + self.stock_dim + 1] -= sell_num_shares
                     self.cost += (
-                        self.state[index + 1]
+                        self.state["full_state"][index + 1]
                         * sell_num_shares
                         * self.sell_cost_pct[index]
                     )
@@ -167,28 +178,30 @@ class StockTradingEnvHRL(gym.Env):
     def _buy_stock(self, index, action):
         def _do_buy():
             if (
-                self.state[index + 2 * self.stock_dim + 1] != True
+                self.state["full_state"][index + 2 * self.stock_dim + 1] != True
             ):  # check if the stock is able to buy
-                # if self.state[index + 1] >0:
-                # Buy only if the price is > 0 (no missing data in this particular date)
-                available_amount = self.state[0] // (
-                    self.state[index + 1] * (1 + self.buy_cost_pct[index])
+                available_amount = self.state["full_state"][0] // (
+                    self.state["full_state"][index + 1] * (1 + self.buy_cost_pct[index])
                 )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
                 # print('available_amount:{}'.format(available_amount))
 
                 # update balance
                 buy_num_shares = min(available_amount, action)
                 buy_amount = (
-                    self.state[index + 1]
+                    self.state["full_state"][index + 1]
                     * buy_num_shares
                     * (1 + self.buy_cost_pct[index])
                 )
-                self.state[0] -= buy_amount
+                self.state["full_state"][0] -= buy_amount
+                self.state["worker"][0] -= buy_amount
 
-                self.state[index + self.stock_dim + 1] += buy_num_shares
+                self.state["full_state"][index + self.stock_dim + 1] += buy_num_shares
+                self.state["worker"][index + self.stock_dim + 1] += buy_num_shares
 
                 self.cost += (
-                    self.state[index + 1] * buy_num_shares * self.buy_cost_pct[index]
+                    self.state["full_state"][index + 1]
+                    * buy_num_shares
+                    * self.buy_cost_pct[index]
                 )
                 self.trades += 1
             else:
@@ -197,7 +210,7 @@ class StockTradingEnvHRL(gym.Env):
             return buy_num_shares
 
         # perform buy action based on the sign of the action
-        buy_num_shares = _do_buy()    
+        buy_num_shares = _do_buy()
 
         return buy_num_shares
 
@@ -211,7 +224,9 @@ class StockTradingEnvHRL(gym.Env):
             index="dayorder", columns="tic", values="close"
         ).sort_index()
         initial_prices = price_matrix.iloc[0].values
-        bh_curve = (price_matrix.values / initial_prices).mean(axis=1) * self.initial_amount
+        bh_curve = (price_matrix.values / initial_prices).mean(
+            axis=1
+        ) * self.initial_amount
 
         plt.figure(figsize=(12, 6))
         plt.plot(dates, agent_curve, label="Agente RL", color="red")
@@ -229,17 +244,23 @@ class StockTradingEnvHRL(gym.Env):
             # print(f"Episode: {self.episode}")
             if self.make_plots:
                 self._make_plot()
-            end_total_asset = self.state['full_state'][0] + sum(
-                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
-                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state["full_state"][0] + sum(
+                np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state["full_state"][
+                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                    ]
+                )
             )
             df_total_value = pd.DataFrame(self.asset_memory)
             tot_reward = (
-                self.state['full_state'][0]
+                self.state["full_state"][0]
                 + sum(
-                    np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+                    np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
                     * np.array(
-                        self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                        self.state["full_state"][
+                            (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                        ]
                     )
                 )
                 - self.asset_memory[0]
@@ -303,19 +324,27 @@ class StockTradingEnvHRL(gym.Env):
             # logger.record("environment/total_cost", self.cost)
             # logger.record("environment/total_trades", self.trades)
 
-            return self.state, self.reward, self.terminal, False, {} # TODO ALIGNMENT REWARD
+            return (
+                self.state,
+                self.reward,
+                self.terminal,
+                False,
+                {},
+            )  # TODO ALIGNMENT REWARD
 
         else:
             actions = actions * self.hmax  # actions initially is scaled between 0 to 1
-            actions = actions.astype(
-                int
-            )
-            begin_total_asset = self.state['full_state'][0] + sum(
-                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
-                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            actions = actions.astype(int)
+            begin_total_asset = self.state["full_state"][0] + sum(
+                np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state["full_state"][
+                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                    ]
+                )
             )
             # print("begin_total_asset:{}".format(begin_total_asset))
-            begin_prices = np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+            begin_prices = np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
 
             argsort_actions = np.argsort(actions)
             sell_index = argsort_actions[: np.where(actions < 0)[0].shape[0]]
@@ -333,23 +362,27 @@ class StockTradingEnvHRL(gym.Env):
                 actions[index] = self._buy_stock(index, actions[index])
 
             self.actions_memory.append(actions)
-            #print(actions)
+            # print(actions)
 
             # state: s -> s+1
             self.day += 1
             self.data = self.df[self.df.dayorder == self.day]
             self.state = self._update_state()
 
-            end_total_asset = self.state['full_state'][0] + sum(
-                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
-                * np.array(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state["full_state"][0] + sum(
+                np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state["full_state"][
+                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                    ]
+                )
             )
 
-            end_prices =  np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+            end_prices = np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
 
             self.asset_memory.append(end_total_asset)
             self.date_memory.append(self._get_date())
-            
+
             self.reward = np.log(end_total_asset / begin_total_asset)
             self.rewards_memory.append(self.reward)
 
@@ -359,14 +392,12 @@ class StockTradingEnvHRL(gym.Env):
 
             # ALIGNMENT REWARD
             price_change = end_prices - begin_prices
-            
+
             rew_align = np.where(
-                actions == 0,
-                0.0,
-                np.sign(actions) * np.sign(price_change)
+                actions == 0, 0.0, np.sign(actions) * np.sign(price_change)
             ).astype(np.float32)
 
-            info = {'rew_align': rew_align}
+            info = {"rew_align": rew_align}
 
         return self.state, self.reward, self.terminal, False, info
 
@@ -386,14 +417,16 @@ class StockTradingEnvHRL(gym.Env):
                 self.initial_amount
                 + np.sum(
                     np.array(self.num_stock_shares)
-                    * np.array(self.state['full_state'][1 : 1 + self.stock_dim])
+                    * np.array(self.state["full_state"][1 : 1 + self.stock_dim])
                 )
             ]
         else:
-            previous_total_asset = self.previous_state['full_state'][0] + sum(
-                np.array(self.state['full_state'][1 : (self.stock_dim + 1)])
+            previous_total_asset = self.previous_state["full_state"][0] + sum(
+                np.array(self.state["full_state"][1 : (self.stock_dim + 1)])
                 * np.array(
-                    self.previous_state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                    self.previous_state["full_state"][
+                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                    ]
                 )
             )
             self.asset_memory = [previous_total_asset]
@@ -411,7 +444,7 @@ class StockTradingEnvHRL(gym.Env):
         return self.state, {}
 
     def render(self, mode="human", close=False):
-        #return self.state
+        # return self.state
         raise NotImplementedError()
 
     def _initiate_state(self):
@@ -421,53 +454,47 @@ class StockTradingEnvHRL(gym.Env):
                 # for multiple stock
                 state = {
                     "full_state": (
-                        [self.initial_amount]               # balance inicial
-                        + self.data.close.values.tolist()   # Close prices i
-                        + self.num_stock_shares             # stock shares i
+                        [self.initial_amount]  # balance inicial
+                        + self.data.close.values.tolist()  # Close prices i
+                        + self.num_stock_shares  # stock shares i
                         + sum(
                             (
                                 self.data[tech].values.tolist()
-                                for tech in self.tech_indicator_list    # Indicators i
+                                for tech in self.tech_indicator_list  # Indicators i
                             ),
                             [],
                         )
                     ),
-                    'manager': self.data.close.values.tolist() + sum(
-                            (
-                                self.data[tech].values.tolist()
-                                for tech in self.tech_indicator_list
-                            ),
-                            [],
-                        ),
-
-                    'worker': [self.initial_amount]
-                            + self.data.close.values.tolist() 
-                            + self.num_stock_shares
-                            + [0] * self.stock_dim
-                }
-                
-            else:
-                # for single stock
-                raise ValueError("No implemented for single stock. Please, select more than one ticker.")
-        else:
-            # Using Previous State
-            if len(self.df.tic.unique()) > 1:
-                # for multiple stock
-                state = {'full_state' : (
-                    [self.previous_state['full_state'][0]]
-                    + self.data.close.values.tolist()
-                    + self.previous_state['full_state'][
-                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
-                    ]
+                    "manager": self.data.close.values.tolist()
                     + sum(
                         (
                             self.data[tech].values.tolist()
                             for tech in self.tech_indicator_list
                         ),
                         [],
-                    )
-                ),
-                'manager': (self.data.close.values.tolist()
+                    ),
+                    "worker": [self.initial_amount]
+                    + self.data.close.values.tolist()
+                    + self.num_stock_shares
+                    + [0] * self.stock_dim,
+                }
+
+            else:
+                # for single stock
+                raise ValueError(
+                    "No implemented for single stock. Please, select more than one ticker."
+                )
+        else:
+            # Using Previous State
+            if len(self.df.tic.unique()) > 1:
+                # for multiple stock
+                state = {
+                    "full_state": (
+                        [self.previous_state["full_state"][0]]
+                        + self.data.close.values.tolist()
+                        + self.previous_state["full_state"][
+                            (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                        ]
                         + sum(
                             (
                                 self.data[tech].values.tolist()
@@ -476,26 +503,46 @@ class StockTradingEnvHRL(gym.Env):
                             [],
                         )
                     ),
-                'worker': (
-                        [self.previous_state['full_state'][0]]
+                    "manager": (
+                        self.data.close.values.tolist()
+                        + sum(
+                            (
+                                self.data[tech].values.tolist()
+                                for tech in self.tech_indicator_list
+                            ),
+                            [],
+                        )
+                    ),
+                    "worker": (
+                        [self.previous_state["full_state"][0]]
                         + self.data.close.values.tolist()
-                        + self.previous_state['full_state'][
+                        + self.previous_state["full_state"][
                             (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
                         ]
-                    )
+                        + self.previous_state["worker"][
+                            (self.stock_dim * 2 + 1) : (self.stock_dim * 3 + 1)
+                        ]
+                    ),
                 }
             else:
                 # for single stock
-                raise ValueError("No implemented for single stock. Please, select more than one ticker.")
+                raise ValueError(
+                    "No implemented for single stock. Please, select more than one ticker."
+                )
         return state
 
     def _update_state(self):
         if len(self.df.tic.unique()) > 1:
             # for multiple stock
-            state = {'full_state': (
-                    [self.state['full_state'][0]]
+            state = {
+                "full_state": (
+                    [self.state["full_state"][0]]
                     + self.data.close.values.tolist()
-                    + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                    + list(
+                        self.state["full_state"][
+                            (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                        ]
+                    )
                     + sum(
                         (
                             self.data[tech].values.tolist()
@@ -504,25 +551,34 @@ class StockTradingEnvHRL(gym.Env):
                         [],
                     )
                 ),
-                'manager': (self.data.close.values.tolist()
-                    + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
-                        + sum(
-                            (
-                                self.data[tech].values.tolist()
-                                for tech in self.tech_indicator_list
-                            ),
-                            [],
-                        )
-                    ),
-                'worker': ([self.state['full_state'][0]]
-                        + self.data.close.values.tolist()
-                        + list(self.state['full_state'][(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                "manager": (
+                    self.data.close.values.tolist()
+                    + sum(
+                        (
+                            self.data[tech].values.tolist()
+                            for tech in self.tech_indicator_list
+                        ),
+                        [],
                     )
+                ),
+                "worker": (
+                    [self.state["full_state"][0]]
+                    + self.data.close.values.tolist()
+                    + list(
+                        self.state["full_state"][
+                            (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
+                        ]
+                    )
+                    + [0]
+                    * self.stock_dim  # Añadimos vector de acciones del manager que luego será reemplazado en train
+                ),
             }
 
         else:
             # for single stock
-            raise ValueError("No implemented for single stock. Please, select more than one ticker.")
+            raise ValueError(
+                "No implemented for single stock. Please, select more than one ticker."
+            )
 
         return state
 
@@ -557,7 +613,9 @@ class StockTradingEnvHRL(gym.Env):
             df_states.index = df_date.date
             # df_actions = pd.DataFrame({'date':date_list,'actions':action_list})
         else:
-            raise ValueError("No implemented for single stock. Please, select more than one ticker.")
+            raise ValueError(
+                "No implemented for single stock. Please, select more than one ticker."
+            )
         return df_states
 
     def save_asset_memory(self):

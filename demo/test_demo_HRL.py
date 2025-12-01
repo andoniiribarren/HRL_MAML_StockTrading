@@ -1,16 +1,16 @@
 import warnings
+
 warnings.filterwarnings("ignore")
 import pandas as pd
 import numpy as np
 import datetime
 import json
-import sys, os
-sys.path.append(os.path.abspath(".."))
 
-from src.preprocess.preprocessor import YahooDownloader
-from src.env_stocktrading.trading_env_HRL import StockTradingEnvHRL
-from src.agent.hrt import HRLforTrading
 
+from preprocess.preprocessor import YahooDownloader
+from env_stocktrading.trading_env_HRL import StockTradingEnvHRL
+from agent.hrt import HRLforTrading
+from preprocess.preprocessor import FeatureEngineer
 
 
 with open("src/preprocess/tickers/ticker_lists.json", "r") as f:
@@ -19,31 +19,31 @@ with open("src/preprocess/tickers/ticker_lists.json", "r") as f:
 dow_30 = data["DOW_30"]
 cryptos = data["CRYPTO_7"]
 
-TRAIN_START_DATE = '2017-01-01'
-TRAIN_END_DATE = '2022-01-01'
-TEST_START_DATE = '2022-01-01'
-TEST_END_DATE = '2023-01-01'
+TRAIN_START_DATE = "2017-01-01"
+TRAIN_END_DATE = "2022-01-01"
+TEST_START_DATE = "2022-01-01"
+TEST_END_DATE = "2023-01-01"
 
 
+df = YahooDownloader(
+    start_date=pd.to_datetime(TRAIN_START_DATE) - datetime.timedelta(days=30),
+    end_date=TEST_END_DATE,
+    ticker_list=dow_30,
+).fetch_data()
 
-df = YahooDownloader(start_date = pd.to_datetime(TRAIN_START_DATE) - datetime.timedelta(days=30),
-                     end_date = TEST_END_DATE,
-                     ticker_list = dow_30).fetch_data()
+INDICATORS = ["macd", "rsi_30", "cci_30"]
 
-INDICATORS = ['macd',
-              'rsi_30',
-              'cci_30']
-
-from src.preprocess.preprocessor import FeatureEngineer
-fe = FeatureEngineer(use_technical_indicator=True,
-                     tech_indicator_list = INDICATORS,
-                     use_turbulence=False,
-                     user_defined_feature = False)
+fe = FeatureEngineer(
+    use_technical_indicator=True,
+    tech_indicator_list=INDICATORS,
+    use_turbulence=False,
+    user_defined_feature=False,
+)
 
 processed = fe.preprocess_data(df)
 processed = processed.copy()
 processed = processed.fillna(0)
-processed = processed.replace(np.inf,0)
+processed = processed.replace(np.inf, 0)
 
 processed = processed[processed.date >= TRAIN_START_DATE].reset_index(drop=True)
 
@@ -57,10 +57,9 @@ df_train["dayorder"] = df_train["date"].astype("category").cat.codes
 df_test["dayorder"] = df_test["date"].astype("category").cat.codes
 
 
-
 # TRAINING
 episode_len = df_train.dayorder.nunique()
-state_space_manager = stock_dimension + len(INDICATORS)*stock_dimension
+state_space_manager = stock_dimension + len(INDICATORS) * stock_dimension
 state_space_worker = 1 + 3 * stock_dimension
 
 buy_cost_list = sell_cost_list = [0.001] * stock_dimension
@@ -79,7 +78,7 @@ hrl_train_env = StockTradingEnvHRL(
     action_space=stock_dimension,
     tech_indicator_list=INDICATORS,
     make_plots=False,
-    print_verbosity=1
+    print_verbosity=1,
 )
 
 

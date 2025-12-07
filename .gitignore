@@ -4,4 +4,4 @@ demo/results/
 hrlmamlenv/
 demo/logs/
 
-*.gitignore
+.env

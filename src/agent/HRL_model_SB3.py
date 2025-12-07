@@ -12,7 +12,7 @@ import torch as th
 # obs_space_worker = [balance, close_prices_i, stock_shares_i, manager_actions_i]
 
 
-class HRLforTrading:
+class HRLAgent:
 
     def __init__(
         self,
@@ -43,7 +43,6 @@ class HRLforTrading:
 
         self.env_M.action_space = spaces.MultiDiscrete([3] * self.stock_dim)
         self.env_W.action_space = spaces.Box(low=0, high=1, shape=(stock_dim,))
-        # TODO ME FALTA ACTION WRAPPER
 
         self.manager = PPO(
             policy="MultiInputPolicy",
@@ -56,6 +55,11 @@ class HRLforTrading:
             env=self.env_W,
             **self.worker_kwargs,
         )
+
+        self.manager.num_timesteps = 0
+        self.worker.num_timesteps = 0
+        self.num_timesteps = 0
+        self.t_r = 0
 
     @staticmethod
     def alpha_function(t: int, alpha_0: float = 1.0, h: float = 0.001) -> float:
@@ -83,9 +87,9 @@ class HRLforTrading:
         freeze_M: bool,
         freeze_W: bool,
         only_alignment_rew: bool,
+        reset_ep: bool = False,
     ):
-        num_timesteps = 0
-        t_r = 0
+        num_train_timesteps = 0
 
         # SETUP LEARNS
         # MANAGER
@@ -103,14 +107,21 @@ class HRLforTrading:
             reset_num_timesteps=reset_timesteps,
             progress_bar=False,
         )
+
         episode_start = True
+        if reset_ep:
+            self.env.episode = 0
         obs, _ = self.env.reset()
-        while num_timesteps < total_timesteps:
+        while num_train_timesteps < total_timesteps:
             self.manager.rollout_buffer.reset()
 
             for _ in range(self.manager.n_steps):
-                if num_timesteps % 100 == 0:
-                    print(f"Paso número: {num_timesteps}")
+                if self.num_timesteps % 100 == 0:
+                    print(f"Paso total número: {self.num_timesteps}")
+                    print(f"Paso de este train número: {num_train_timesteps}")
+                    print(f"Worker timesteps: {self.worker.num_timesteps}")
+                    print(f"manager timesteps: {self.manager.num_timesteps}\n")
+                    print("DEBUG TR: ", self.t_r)
                 # Separar observaciones
                 obs_M = obs["manager"]
                 obs_W_raw = obs["worker"]
@@ -130,18 +141,14 @@ class HRLforTrading:
 
                     obs_tensor = th.as_tensor(obs_M_batch).to(self.manager.device)
                     obs_M_dict = {"manager": obs_tensor}
-                    actions_M_raw, values, log_probs = self.manager.policy(
-                        obs_M_dict
-                    )  # antes obs
+                    actions_M_raw, values, log_probs = self.manager.policy(obs_M_dict)
 
                 # Generar obs para el WORKER
-                actions_M_np = actions_M_raw.cpu().numpy()
-
-                actions_M = actions_M_np - 1
+                actions_M = actions_M_raw.cpu().numpy() - 1
                 actions_M = np.squeeze(actions_M, axis=0)  # Quitar dimensión extra
 
-                # Actualizar anterior buffer y política del worker porque necesitábamos new_ibs
-                if num_timesteps > 0:
+                # WORKER: Actualizar anterior buffer y política del worker porque necesitábamos new_ibs
+                if num_train_timesteps > 0:
                     new_obs_worker[-self.stock_dim :] = actions_M
 
                     new_obs_worker_dict = {"worker": new_obs_worker}
@@ -156,10 +163,16 @@ class HRLforTrading:
                     )
                     # Actualizar política de worker si aplica
                     if not freeze_W:
+                        if self.num_timesteps % 100 == 0:
+                            print("2- Worker timesteps:", self.worker.num_timesteps)
+                            print(
+                                "2- Worker buffer size:",
+                                self.worker.replay_buffer.size(),
+                            )
                         if (
                             self.worker.num_timesteps > self.worker.learning_starts
                             and self.worker.replay_buffer.size()
-                            > self.worker.batch_size
+                            > self.worker.batch_size  # TODO: revisar en el repo de la asignatura DQN
                         ):
                             # TODO revisar gradient step
                             self.worker.train(
@@ -193,13 +206,16 @@ class HRLforTrading:
                     )
                 else:
                     reward_M = self.get_manager_reward(
-                        reward, rew_align, t=t_r, mode="combined"
+                        reward, rew_align, t=self.t_r, mode="combined"
                     )
-                    t_r += 1
+                    self.t_r += 1
 
-                num_timesteps += 1  # Revisar TODO self.env.num_envs
-                self.manager.num_timesteps = num_timesteps
-                self.worker.num_timesteps = num_timesteps
+                num_train_timesteps += 1
+                self.num_timesteps += 1
+                if not freeze_M:
+                    self.manager.num_timesteps += 1
+                if not freeze_W:
+                    self.worker.num_timesteps += 1
 
                 ###### Guardar en buffers ######
                 # Manager
@@ -261,6 +277,7 @@ class HRLforTrading:
             freeze_M=False,
             freeze_W=True,
             only_alignment_rew=True,
+            reset_ep=True,
         )
         return self
 
@@ -290,7 +307,7 @@ class HRLforTrading:
                 reset_timesteps=False,
                 freeze_M=False,
                 freeze_W=True,
-                only_alignment_rew=False,
+                only_alignment_rew=False,  # A * Ralign + (1-A)*Rw igual un decaiminento más rápido
             )
 
             self.trainHRL(

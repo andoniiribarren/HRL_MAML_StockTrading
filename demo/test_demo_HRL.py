@@ -9,7 +9,9 @@ import json
 
 from preprocess.preprocessor import YahooDownloader
 from env_stocktrading.trading_env_HRL import StockTradingEnvHRL
-from agent.hrt import HRLforTrading
+
+# from agent.HRL_model_SB3 import HRLAgent
+from agent.HRL_model import HRLAgent
 from preprocess.preprocessor import FeatureEngineer
 
 
@@ -81,7 +83,48 @@ hrl_train_env = StockTradingEnvHRL(
     print_verbosity=1,
 )
 
+paper_params_manager = {
+    "learning_rate": 3e-4,
+    "clip_range": 0.2,
+    "n_steps": 1024,  # no lo veo en PPO, buffer_size no existe
+    "batch_size": 256,
+    "gamma": 0.99,
+    "verbose": 1,
+}
 
-model = HRLforTrading(env=hrl_train_env, stock_dim=stock_dimension)
+paper_params_worker = {
+    "learning_rate": 1e-3,
+    "tau": 0.005,
+    "buffer_size": 200000,
+    "batch_size": 256,
+    "gamma": 0.99,
+    "verbose": 1,
+}
+
+initial_manager_episodes = 2
+initial_worker_episodes = 2
+initial_cycle_episodes = 5
+
+model = HRLAgent(
+    env=hrl_train_env,
+    stock_dim=stock_dimension,
+    manager_kwargs=paper_params_manager,
+    worker_kwargs=paper_params_worker,
+    initial_manager_timesteps=initial_manager_episodes * episode_len,
+    initial_worker_timesteps=initial_worker_episodes * episode_len,
+    n_alt_cycles=500,
+    initial_cycle_steps=initial_cycle_episodes * episode_len,
+    dism_factor=0.95,
+)
 n_episodes = 10
 trained_model = model.train_HRL_model()
+
+# Arreglar cosas
+# Ver que funcione PPO de por ahí
+# Si sale igual tiro para alante, repito los entrenamientos del HRT y luego implementar meta-learning
+
+
+# Returns, Sharpe y diversificación
+# Demostrar que quitando ss
+
+#

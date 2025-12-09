@@ -41,11 +41,17 @@ class RolloutBuffer:
 
 class ActorCritic(nn.Module):
     def __init__(
-        self, state_dim, action_dim, has_continuous_action_space, action_std_init
+        self,
+        state_dim,
+        action_dim,
+        has_continuous_action_space,
+        action_std_init,
+        is_multi_discrete,
     ):
         super(ActorCritic, self).__init__()
 
         self.has_continuous_action_space = has_continuous_action_space
+        self.is_multi_discrete = is_multi_discrete
 
         if has_continuous_action_space:
             self.action_dim = action_dim
@@ -63,14 +69,31 @@ class ActorCritic(nn.Module):
                 nn.Tanh(),
             )
         else:
-            self.actor = nn.Sequential(
-                nn.Linear(state_dim, 64),
-                nn.Tanh(),
-                nn.Linear(64, 64),
-                nn.Tanh(),
-                nn.Linear(64, action_dim),
-                nn.Softmax(dim=-1),
-            )
+            if self.is_multi_discrete:
+                # action_dim aquí será algo tipo np.array([3,3,3,...]) de len = stock_dim
+                nvec = torch.as_tensor(action_dim, dtype=torch.long)
+                self.nvec = nvec
+                self.n_branches = int(len(nvec))
+                self.actor_out_dim = int(self.nvec.sum().item())  # stock_dim * 3
+
+                # SIN Softmax, usaremos logits y Categorical(logits=...)
+                self.actor = nn.Sequential(
+                    nn.Linear(state_dim, 64),
+                    nn.Tanh(),
+                    nn.Linear(64, 64),
+                    nn.Tanh(),
+                    nn.Linear(64, self.actor_out_dim),
+                )
+            else:
+                # Discreto simple como antes
+                self.actor = nn.Sequential(
+                    nn.Linear(state_dim, 64),
+                    nn.Tanh(),
+                    nn.Linear(64, 64),
+                    nn.Tanh(),
+                    nn.Linear(64, action_dim),
+                    nn.Softmax(dim=-1),
+                )
         # critic
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 64),
@@ -101,23 +124,64 @@ class ActorCritic(nn.Module):
 
     def act(self, state):
 
-        if self.has_continuous_action_space:
+        if self.is_multi_discrete:
+            # state puede ser shape (state_dim,)
+            logits = self.actor(state)  # shape (actor_out_dim,)
+            # la partimos en bloques según nvec: cada bloque es de tamaño 3
+            splits = torch.split(logits, self.nvec.tolist(), dim=-1)
+
+            actions = []
+            logprob_parts = []
+            for logit_i in splits:
+                dist_i = Categorical(logits=logit_i)
+                a_i = dist_i.sample()
+                actions.append(a_i)
+                logprob_parts.append(dist_i.log_prob(a_i))
+
+            action = torch.stack(actions, dim=-1)  # shape (n_branches,)
+            action_logprob = torch.stack(logprob_parts).sum()
+            state_val = self.critic(state)
+            return action.detach(), action_logprob.detach(), state_val.detach()
+
+        elif self.has_continuous_action_space:
             action_mean = self.actor(state)
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
             dist = MultivariateNormal(action_mean, cov_mat)
+            action = dist.sample()
+            action_logprob = dist.log_prob(action)
+            state_val = self.critic(state)
+            return action.detach(), action_logprob.detach(), state_val.detach()
         else:
-            action_probs = self.actor(state)
-            dist = Categorical(action_probs)
-
-        action = dist.sample()
-        action_logprob = dist.log_prob(action)
-        state_val = self.critic(state)
-
-        return action.detach(), action_logprob.detach(), state_val.detach()
+            raise NotImplementedError("Multidiscrete only accepted.")
 
     def evaluate(self, state, action):
 
-        if self.has_continuous_action_space:
+        if self.is_multi_discrete:
+            # state: (T, state_dim)
+            # action: (T, n_branches)
+            logits = self.actor(state)  # (T, actor_out_dim)
+            splits = torch.split(logits, self.nvec.tolist(), dim=-1)
+
+            logprob_parts = []
+            entropy_parts = []
+
+            # recorremos cada rama (stock)
+            for i, logit_i in enumerate(splits):
+                dist_i = Categorical(logits=logit_i)  # logits por rama
+                # actions[:, i] son las acciones de esa rama
+                logprob_i = dist_i.log_prob(action[:, i])
+                entropy_i = dist_i.entropy()
+                logprob_parts.append(logprob_i)
+                entropy_parts.append(entropy_i)
+
+            # sumamos log-probs y entropías sobre ramas
+            action_logprobs = torch.stack(logprob_parts, dim=-1).sum(dim=-1)  # (T,)
+            dist_entropy = torch.stack(entropy_parts, dim=-1).sum(dim=-1)  # (T,)
+
+            state_values = self.critic(state)
+            return action_logprobs, state_values, dist_entropy
+
+        elif self.has_continuous_action_space:
             action_mean = self.actor(state)
 
             action_var = self.action_var.expand_as(action_mean)
@@ -127,14 +191,14 @@ class ActorCritic(nn.Module):
             # For Single Action Environments.
             if self.action_dim == 1:
                 action = action.reshape(-1, self.action_dim)
-        else:
-            action_probs = self.actor(state)
-            dist = Categorical(action_probs)
-        action_logprobs = dist.log_prob(action)
-        dist_entropy = dist.entropy()
-        state_values = self.critic(state)
 
-        return action_logprobs, state_values, dist_entropy
+            action_logprobs = dist.log_prob(action)
+            dist_entropy = dist.entropy()
+            state_values = self.critic(state)
+
+            return action_logprobs, state_values, dist_entropy
+        else:
+            raise NotImplementedError("Multidiscrete only accepted.")
 
 
 class PPO:
@@ -149,9 +213,11 @@ class PPO:
         eps_clip,
         has_continuous_action_space,
         action_std_init=0.6,
+        is_multi_discrete: bool = True,
     ):
 
         self.has_continuous_action_space = has_continuous_action_space
+        self.is_multi_discrete = is_multi_discrete
 
         if has_continuous_action_space:
             self.action_std = action_std_init
@@ -163,7 +229,11 @@ class PPO:
         self.buffer = RolloutBuffer()
 
         self.policy = ActorCritic(
-            state_dim, action_dim, has_continuous_action_space, action_std_init
+            state_dim,
+            action_dim,
+            has_continuous_action_space,
+            action_std_init,
+            is_multi_discrete=self.is_multi_discrete,
         ).to(device)
         self.optimizer = torch.optim.Adam(
             [
@@ -173,7 +243,11 @@ class PPO:
         )
 
         self.policy_old = ActorCritic(
-            state_dim, action_dim, has_continuous_action_space, action_std_init
+            state_dim,
+            action_dim,
+            has_continuous_action_space,
+            action_std_init,
+            is_multi_discrete=self.is_multi_discrete,
         ).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
 
@@ -243,7 +317,11 @@ class PPO:
             self.buffer.logprobs.append(action_logprob)
             self.buffer.state_values.append(state_val)
 
-            return action.item()
+            if self.is_multi_discrete:
+                # vector de ints por rama
+                return action.detach().cpu().numpy()
+            else:
+                return action.item()
 
     def update(self):
         # Monte Carlo estimate of returns
@@ -265,9 +343,16 @@ class PPO:
         old_states = (
             torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device)
         )
-        old_actions = (
-            torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device)
-        )
+        if self.is_multi_discrete:
+            old_actions = (
+                torch.squeeze(torch.stack(self.buffer.actions, dim=0))
+                .detach()
+                .to(device)
+            )
+        else:
+            raise NotImplementedError(
+                "Not implemented, choose multidiscrete and >1 stocks."
+            )
         old_logprobs = (
             torch.squeeze(torch.stack(self.buffer.logprobs, dim=0)).detach().to(device)
         )

@@ -47,26 +47,21 @@ class HRLAgent:
 
         # args for PPO
         state_dim = self.env_M.observation_space["manager"].shape[0]
-        action_dim = self.env_M.action_space.shape[0]
-        # TODO mover a manager_kwargs fuera de aquí
-        lr_actor = 3e-4
-        lr_critic = 3e-4
-        gamma = 0.99
-        K_epochs = 80  # update policy for K epochs in one PPO update
-        eps_clip = 0.2
-        has_continuous_action_space = False
-        action_std = 0.6
+        action_dim = [
+            3
+        ] * self.stock_dim  # self.env_M.action_space.shape[0] # Número de acciones posibles por stock_dim
 
         self.manager = PPO(
             state_dim,
             action_dim,
-            lr_actor,
-            lr_critic,
-            gamma,
-            K_epochs,
-            eps_clip,
-            has_continuous_action_space,
-            action_std,
+            lr_actor=self.manager_kwargs["lr_actor"],
+            lr_critic=self.manager_kwargs["lr_critic"],
+            gamma=self.manager_kwargs["gamma"],
+            K_epochs=self.manager_kwargs["K_epochs"],
+            eps_clip=self.manager_kwargs["eps_clip"],
+            has_continuous_action_space=False,
+            action_std_init=None,
+            is_multi_discrete=True,
         )
 
         self.worker = DDPG(
@@ -109,7 +104,7 @@ class HRLAgent:
         reset_ep: bool = False,
     ):
         num_train_timesteps = 0
-        update_timestep = self.max_ep_len * 4
+        manager_update_timestep = self.manager_kwargs["update_timestep"]
 
         # WORKER (DDPG)
         _, worker_callback = self.worker._setup_learn(
@@ -130,12 +125,11 @@ class HRLAgent:
 
             for t in range(1, self.max_ep_len + 1):
 
-                if self.num_timesteps % 100 == 0:
-                    print(f"Paso total número: {self.num_timesteps}")
-                    print(f"Paso de este train número: {num_train_timesteps}")
-                    print(f"Worker timesteps: {self.worker.num_timesteps}")
-                    print(f"manager timesteps: {self.manager_timestep}\n")
-                    print("DEBUG TR: ", self.t_r)
+                """if self.num_timesteps % 100 == 0:
+                print(f"Paso total número: {self.num_timesteps}")
+                print(f"Paso de este train número: {num_train_timesteps}")
+                print(f"Worker timesteps: {self.worker.num_timesteps}")
+                print(f"manager timesteps: {self.manager_timestep}\n")"""
                 # Separar observaciones
                 obs_M = obs["manager"]
                 obs_W_raw = obs["worker"]
@@ -145,8 +139,8 @@ class HRLAgent:
 
                 ##### TODO
                 # Generar obs para el WORKER
-                actions_M = actions_M_raw.cpu().numpy() - 1
-                actions_M = np.squeeze(actions_M, axis=0)  # Quitar dimensión extra
+                actions_M = actions_M_raw - 1  # actions_M_raw.cpu().numpy() - 1
+                # actions_M = np.squeeze(actions_M, axis=0)  # Quitar dimensión extra
                 ##### TODO
 
                 # WORKER: Actualizar anterior buffer y política del worker porque necesitábamos new_ibs
@@ -165,12 +159,6 @@ class HRLAgent:
                     )
                     # Actualizar política de worker si aplica
                     if not freeze_W:
-                        if self.num_timesteps % 100 == 0:
-                            print("2- Worker timesteps:", self.worker.num_timesteps)
-                            print(
-                                "2- Worker buffer size:",
-                                self.worker.replay_buffer.size(),
-                            )
                         if (
                             self.worker.num_timesteps > self.worker.learning_starts
                             and self.worker.replay_buffer.size()
@@ -212,19 +200,21 @@ class HRLAgent:
 
                 num_train_timesteps += 1
                 self.num_timesteps += 1
-                if not freeze_M:
-                    self.manager_timestep += 1
-                    if self.manager_timestep % update_timestep == 0:
-                        self.manager.update()
-                if not freeze_W:
-                    self.worker.num_timesteps += 1
 
                 ###### Guardar en buffers ######
                 # Manager
                 # saving reward and is_terminals
                 self.manager.buffer.rewards.append(reward_M)
                 self.manager.buffer.is_terminals.append(done)
-                current_ep_reward += reward_M
+                current_ep_reward_manager += reward_M
+
+                # Entrenar manager si toca
+                if not freeze_M:
+                    self.manager_timestep += 1
+                    if self.manager_timestep % manager_update_timestep == 0:
+                        self.manager.update()
+                if not freeze_W:
+                    self.worker.num_timesteps += 1
 
                 prev_obs_dict_worker = obs_W_dict.copy()
                 new_obs_worker = new_obs["worker"]
@@ -301,3 +291,59 @@ class HRLAgent:
         self.ph2_worker_training()
         self.alternate_training()
         return self
+
+    def predictHRL(self, env):
+        obs, _ = env.reset()
+
+        max_steps = len(env.df.dayorder.unique()) - 1
+
+        account_memory = []
+        actions_memory = []
+
+        self.manager.policy.eval()
+
+        for i in range(max_steps + 1):
+            # --- 1. ACCIÓN DEL MANAGER ---
+            obs_M = obs["manager"]
+
+            action_M_raw = self.manager.select_action(obs_M)
+
+            if isinstance(action_M_raw, np.ndarray):
+                action_M = action_M_raw - 1
+            else:
+                action_M = action_M_raw - 1
+
+            obs_W_raw = obs["worker"]
+
+            new_obs_worker = np.array(obs_W_raw, dtype=np.float32)
+            new_obs_worker[-self.stock_dim :] = action_M
+
+            action_W, _ = self.worker.predict(
+                {"worker": new_obs_worker}, deterministic=True
+            )
+
+            combined_action = action_M * action_W
+
+            next_obs, reward, done, _, info = env.step(combined_action)
+
+            # --- D. GUARDAR RESULTADOS ---
+            # Si es el último paso, extraemos la memoria interna del entorno
+            # Igual que en tu ejemplo predict_RL
+            if i == max_steps - 1 or done:
+                print("Retrieving memory from env...")
+                account_memory = env.save_asset_memory()
+                actions_memory = env.save_action_memory()
+
+                if done:
+                    print("Hit end!")
+                    break
+
+            obs = next_obs
+
+        # Volver a modo train
+        self.manager.policy.train()
+
+        # Devolvemos DataFrames o Listas según espere tu función objetivo
+        # En tu ejemplo devuelve account_memory[0] porque VecEnv devuelve lista de listas.
+        # Aquí, como usamos el env directo, devolvemos la lista directa.
+        return account_memory, actions_memory

@@ -175,7 +175,9 @@ class HRLAgent:
 
                 with th.no_grad():
                     obs_W_dict = {"worker": obs_W_raw}
-                    actions_W, _ = self.worker.predict(obs_W_dict, deterministic=False)
+                    actions_W, _ = self.worker.predict(
+                        obs_W_dict, deterministic=freeze_W
+                    )
 
                 actions_combined = actions_M * actions_W
 
@@ -232,6 +234,7 @@ class HRLAgent:
         """
         print("Starting Phase 1: Only train Manager")
         # Aquí al comienzo usa sólo alignment
+        self.manager.policy.train()
         self.trainHRL(
             total_timesteps=self.initial_manager_timesteps,
             reset_timesteps=False,
@@ -248,6 +251,7 @@ class HRLAgent:
         """
         print("Starting Phase 2: Only train Worker")
         # Congelar parámetros del manager y entrenar con ellos
+        self.manager.policy.eval()
         self.trainHRL(
             total_timesteps=self.initial_worker_timesteps,
             reset_timesteps=False,
@@ -262,7 +266,7 @@ class HRLAgent:
         steps_cycle = self.initial_cycle_steps
 
         for cycle in range(self.n_alt_cycles):
-
+            self.manager.policy.train()
             self.trainHRL(
                 total_timesteps=steps_cycle,
                 reset_timesteps=False,
@@ -270,7 +274,7 @@ class HRLAgent:
                 freeze_W=True,
                 only_alignment_rew=False,  # A * Ralign + (1-A)*Rw igual un decaiminento más rápido
             )
-
+            self.manager.policy.eval()
             self.trainHRL(
                 total_timesteps=steps_cycle,
                 reset_timesteps=False,

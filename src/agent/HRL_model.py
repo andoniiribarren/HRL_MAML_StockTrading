@@ -272,7 +272,7 @@ class HRLAgent:
                 reset_timesteps=False,
                 freeze_M=False,
                 freeze_W=True,
-                only_alignment_rew=False,  # A * Ralign + (1-A)*Rw igual un decaiminento más rápido
+                only_alignment_rew=False,
             )
             self.manager.policy.eval()
             self.trainHRL(
@@ -307,7 +307,7 @@ class HRLAgent:
         self.manager.policy.eval()
 
         for i in range(max_steps + 1):
-            # --- 1. ACCIÓN DEL MANAGER ---
+            # ACCIÓN DEL MANAGER 
             obs_M = obs["manager"]
 
             action_M_raw = self.manager.select_action(obs_M)
@@ -330,9 +330,7 @@ class HRLAgent:
 
             next_obs, reward, done, _, info = env.step(combined_action)
 
-            # --- D. GUARDAR RESULTADOS ---
-            # Si es el último paso, extraemos la memoria interna del entorno
-            # Igual que en tu ejemplo predict_RL
+            # GUARDAR RESULTADOS
             if i == max_steps - 1 or done:
                 print("Retrieving memory from env...")
                 account_memory = env.save_asset_memory()
@@ -343,11 +341,4 @@ class HRLAgent:
                     break
 
             obs = next_obs
-
-        # Volver a modo train
-        self.manager.policy.train()
-
-        # Devolvemos DataFrames o Listas según espere tu función objetivo
-        # En tu ejemplo devuelve account_memory[0] porque VecEnv devuelve lista de listas.
-        # Aquí, como usamos el env directo, devolvemos la lista directa.
         return account_memory, actions_memory

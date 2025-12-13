@@ -10,8 +10,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 matplotlib.use("Agg")
 
-# from stable_baselines3.common.logger import Logger, KVWriter, CSVOutputFormat
-
 
 class StockTradingEnv(gym.Env):
     """
@@ -65,7 +63,9 @@ class StockTradingEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.state_space,)
         )
-        self.data = self.df[self.df.dayorder == self.day] # self.data = self.df.loc[self.day, :]
+        self.data = self.df[
+            self.df.dayorder == self.day
+        ]  # self.data = self.df.loc[self.day, :]
         self.terminal = False
         self.make_plots = make_plots
         self.print_verbosity = print_verbosity
@@ -173,7 +173,7 @@ class StockTradingEnv(gym.Env):
             return buy_num_shares
 
         # perform buy action based on the sign of the action
-        buy_num_shares = _do_buy()    
+        buy_num_shares = _do_buy()
 
         return buy_num_shares
 
@@ -187,7 +187,9 @@ class StockTradingEnv(gym.Env):
             index="dayorder", columns="tic", values="close"
         ).sort_index()
         initial_prices = price_matrix.iloc[0].values
-        bh_curve = (price_matrix.values / initial_prices).mean(axis=1) * self.initial_amount
+        bh_curve = (price_matrix.values / initial_prices).mean(
+            axis=1
+        ) * self.initial_amount
 
         plt.figure(figsize=(12, 6))
         plt.plot(dates, agent_curve, label="Agente RL", color="red")
@@ -308,7 +310,7 @@ class StockTradingEnv(gym.Env):
                 actions[index] = self._buy_stock(index, actions[index])
 
             self.actions_memory.append(actions)
-            #print(actions)
+            # print(actions)
 
             # state: s -> s+1
             self.day += 1

@@ -70,13 +70,11 @@ class ActorCritic(nn.Module):
             )
         else:
             if self.is_multi_discrete:
-                # action_dim aquí será algo tipo np.array([3,3,3,...]) de len = stock_dim
                 nvec = torch.as_tensor(action_dim, dtype=torch.long)
                 self.nvec = nvec
                 self.n_branches = int(len(nvec))
-                self.actor_out_dim = int(self.nvec.sum().item())  # stock_dim * 3
+                self.actor_out_dim = int(self.nvec.sum().item())
 
-                # SIN Softmax, usaremos logits y Categorical(logits=...)
                 self.actor = nn.Sequential(
                     nn.Linear(state_dim, 64),
                     nn.Tanh(),
@@ -85,7 +83,6 @@ class ActorCritic(nn.Module):
                     nn.Linear(64, self.actor_out_dim),
                 )
             else:
-                # Discreto simple como antes
                 self.actor = nn.Sequential(
                     nn.Linear(state_dim, 64),
                     nn.Tanh(),
@@ -94,7 +91,6 @@ class ActorCritic(nn.Module):
                     nn.Linear(64, action_dim),
                     nn.Softmax(dim=-1),
                 )
-        # critic
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 64),
             nn.Tanh(),
@@ -125,9 +121,7 @@ class ActorCritic(nn.Module):
     def act(self, state):
 
         if self.is_multi_discrete:
-            # state puede ser shape (state_dim,)
-            logits = self.actor(state)  # shape (actor_out_dim,)
-            # la partimos en bloques según nvec: cada bloque es de tamaño 3
+            logits = self.actor(state)
             splits = torch.split(logits, self.nvec.tolist(), dim=-1)
 
             actions = []
@@ -138,7 +132,7 @@ class ActorCritic(nn.Module):
                 actions.append(a_i)
                 logprob_parts.append(dist_i.log_prob(a_i))
 
-            action = torch.stack(actions, dim=-1)  # shape (n_branches,)
+            action = torch.stack(actions, dim=-1)
             action_logprob = torch.stack(logprob_parts).sum()
             state_val = self.critic(state)
             return action.detach(), action_logprob.detach(), state_val.detach()
@@ -157,26 +151,21 @@ class ActorCritic(nn.Module):
     def evaluate(self, state, action):
 
         if self.is_multi_discrete:
-            # state: (T, state_dim)
-            # action: (T, n_branches)
-            logits = self.actor(state)  # (T, actor_out_dim)
+            logits = self.actor(state)
             splits = torch.split(logits, self.nvec.tolist(), dim=-1)
 
             logprob_parts = []
             entropy_parts = []
 
-            # recorremos cada rama (stock)
             for i, logit_i in enumerate(splits):
-                dist_i = Categorical(logits=logit_i)  # logits por rama
-                # actions[:, i] son las acciones de esa rama
+                dist_i = Categorical(logits=logit_i)
                 logprob_i = dist_i.log_prob(action[:, i])
                 entropy_i = dist_i.entropy()
                 logprob_parts.append(logprob_i)
                 entropy_parts.append(entropy_i)
 
-            # sumamos log-probs y entropías sobre ramas
-            action_logprobs = torch.stack(logprob_parts, dim=-1).sum(dim=-1)  # (T,)
-            dist_entropy = torch.stack(entropy_parts, dim=-1).sum(dim=-1)  # (T,)
+            action_logprobs = torch.stack(logprob_parts, dim=-1).sum(dim=-1)
+            dist_entropy = torch.stack(entropy_parts, dim=-1).sum(dim=-1)
 
             state_values = self.critic(state)
             return action_logprobs, state_values, dist_entropy
@@ -188,7 +177,6 @@ class ActorCritic(nn.Module):
             cov_mat = torch.diag_embed(action_var).to(device)
             dist = MultivariateNormal(action_mean, cov_mat)
 
-            # For Single Action Environments.
             if self.action_dim == 1:
                 action = action.reshape(-1, self.action_dim)
 
@@ -318,7 +306,6 @@ class PPO:
             self.buffer.state_values.append(state_val)
 
             if self.is_multi_discrete:
-                # vector de ints por rama
                 return action.detach().cpu().numpy()
             else:
                 return action.item()

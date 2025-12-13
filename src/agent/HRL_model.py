@@ -24,7 +24,6 @@ class HRLAgent:
         initial_worker_timesteps: int = 2000,
         n_alt_cycles: int = 500,
         initial_cycle_steps: int = 5000,
-        dism_factor: float = 0.99,
     ):
         self.initial_manager_timesteps = initial_manager_timesteps
         self.initial_worker_timesteps = initial_worker_timesteps
@@ -32,7 +31,6 @@ class HRLAgent:
         self.worker_kwargs = worker_kwargs or {}
         self.n_alt_cycles = n_alt_cycles
         self.initial_cycle_steps = initial_cycle_steps
-        self.dism_factor = dism_factor
         self.stock_dim = stock_dim
 
         self.env = env
@@ -47,9 +45,7 @@ class HRLAgent:
 
         # args for PPO
         state_dim = self.env_M.observation_space["manager"].shape[0]
-        action_dim = [
-            3
-        ] * self.stock_dim  # self.env_M.action_space.shape[0] # Número de acciones posibles por stock_dim
+        action_dim = [3] * self.stock_dim
 
         self.manager = PPO(
             state_dim,
@@ -90,7 +86,7 @@ class HRLAgent:
             return align_scalar
         elif mode == "combined":
             alpha_t = self.alpha_function(t)
-            return alpha_t * align_scalar + (1 - alpha_t) * reward  # Equation 2
+            return alpha_t * align_scalar + (1 - alpha_t) * reward
         else:
             raise ValueError(f"'{mode}' is not a valid reward mode.")
 
@@ -137,11 +133,8 @@ class HRLAgent:
                 # Acciones del MANAGER
                 actions_M_raw = self.manager.select_action(obs_M)
 
-                ##### TODO
                 # Generar obs para el WORKER
-                actions_M = actions_M_raw - 1  # actions_M_raw.cpu().numpy() - 1
-                # actions_M = np.squeeze(actions_M, axis=0)  # Quitar dimensión extra
-                ##### TODO
+                actions_M = actions_M_raw - 1
 
                 # WORKER: Actualizar anterior buffer y política del worker porque necesitábamos new_ibs
                 if num_train_timesteps > 0:
@@ -162,9 +155,8 @@ class HRLAgent:
                         if (
                             self.worker.num_timesteps > self.worker.learning_starts
                             and self.worker.replay_buffer.size()
-                            > self.worker.batch_size  # TODO: revisar en el repo de la asignatura DQN
+                            > self.worker.batch_size
                         ):
-                            # TODO revisar gradient step
                             self.worker.train(
                                 gradient_steps=1,
                                 batch_size=self.worker.batch_size,
@@ -229,9 +221,6 @@ class HRLAgent:
         return self
 
     def ph1_manager_training(self):
-        """
-        Fase 1 - Entrenar manager solo con alignment rewards
-        """
         print("Starting Phase 1: Only train Manager")
         # Aquí al comienzo usa sólo alignment
         self.manager.policy.train()
@@ -246,9 +235,6 @@ class HRLAgent:
         return self
 
     def ph2_worker_training(self):
-        """
-        Fase 2 - Worker training
-        """
         print("Starting Phase 2: Only train Worker")
         # Congelar parámetros del manager y entrenar con ellos
         self.manager.policy.eval()
@@ -283,8 +269,6 @@ class HRLAgent:
                 only_alignment_rew=True,
             )
 
-            steps_cycle = int(steps_cycle * self.dism_factor)
-
             print(f"[Cycle {cycle+1}/{self.n_alt_cycles}] done")
 
         return self
@@ -298,6 +282,7 @@ class HRLAgent:
 
     def predictHRL(self, env):
         obs, _ = env.reset()
+        done = False
 
         max_steps = len(env.df.dayorder.unique()) - 1
 
@@ -307,7 +292,7 @@ class HRLAgent:
         self.manager.policy.eval()
 
         for i in range(max_steps + 1):
-            # ACCIÓN DEL MANAGER 
+            # ACCIÓN DEL MANAGER
             obs_M = obs["manager"]
 
             action_M_raw = self.manager.select_action(obs_M)
@@ -327,7 +312,6 @@ class HRLAgent:
             )
 
             combined_action = action_M * action_W
-
             next_obs, reward, done, _, info = env.step(combined_action)
 
             # GUARDAR RESULTADOS
@@ -335,10 +319,11 @@ class HRLAgent:
                 print("Retrieving memory from env...")
                 account_memory = env.save_asset_memory()
                 actions_memory = env.save_action_memory()
+                last_state = obs
 
                 if done:
                     print("Hit end!")
                     break
 
             obs = next_obs
-        return account_memory, actions_memory
+        return account_memory, actions_memory, last_state

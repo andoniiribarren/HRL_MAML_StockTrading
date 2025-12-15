@@ -44,22 +44,20 @@ class ActorCritic(nn.Module):
         self,
         state_dim,
         action_dim,
-        has_continuous_action_space,
         action_std_init,
-        is_multi_discrete,
     ):
         super(ActorCritic, self).__init__()
 
-        self.has_continuous_action_space = has_continuous_action_space
-        self.is_multi_discrete = is_multi_discrete
+        self.has_continuous_action_space = False
+        self.is_multi_discrete = True
 
-        if has_continuous_action_space:
+        if self.has_continuous_action_space:
             self.action_dim = action_dim
             self.action_var = torch.full(
                 (action_dim,), action_std_init * action_std_init
             ).to(device)
         # actor
-        if has_continuous_action_space:
+        if self.has_continuous_action_space:
             self.actor = nn.Sequential(
                 nn.Linear(state_dim, 64),
                 nn.Tanh(),
@@ -148,6 +146,21 @@ class ActorCritic(nn.Module):
         else:
             raise NotImplementedError("Multidiscrete only accepted.")
 
+    def act_deterministic(self, state):
+        if self.is_multi_discrete:
+            logits = self.actor(state)
+            splits = torch.split(logits, self.nvec.tolist(), dim=-1)
+
+            actions = []
+            for logit_i in splits:
+                best_action = torch.argmax(logit_i, dim=-1)
+                actions.append(best_action)
+
+            return torch.stack(actions, dim=-1)
+
+        else:
+            raise NotImplementedError("Only MultiDiscrete allowed")
+
     def evaluate(self, state, action):
 
         if self.is_multi_discrete:
@@ -199,15 +212,13 @@ class PPO:
         gamma,
         K_epochs,
         eps_clip,
-        has_continuous_action_space,
-        action_std_init=0.6,
-        is_multi_discrete: bool = True,
+        action_std_init=None,
     ):
 
-        self.has_continuous_action_space = has_continuous_action_space
-        self.is_multi_discrete = is_multi_discrete
+        self.has_continuous_action_space = False
+        self.is_multi_discrete = True
 
-        if has_continuous_action_space:
+        if self.has_continuous_action_space:
             self.action_std = action_std_init
 
         self.gamma = gamma
@@ -219,9 +230,7 @@ class PPO:
         self.policy = ActorCritic(
             state_dim,
             action_dim,
-            has_continuous_action_space,
             action_std_init,
-            is_multi_discrete=self.is_multi_discrete,
         ).to(device)
         self.optimizer = torch.optim.Adam(
             [
@@ -233,9 +242,7 @@ class PPO:
         self.policy_old = ActorCritic(
             state_dim,
             action_dim,
-            has_continuous_action_space,
             action_std_init,
-            is_multi_discrete=self.is_multi_discrete,
         ).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
 
@@ -282,33 +289,23 @@ class PPO:
             "--------------------------------------------------------------------------------------------"
         )
 
-    def select_action(self, state):
-
-        if self.has_continuous_action_space:
-            with torch.no_grad():
-                state = torch.FloatTensor(state).to(device)
-                action, action_logprob, state_val = self.policy_old.act(state)
-
-            self.buffer.states.append(state)
-            self.buffer.actions.append(action)
-            self.buffer.logprobs.append(action_logprob)
-            self.buffer.state_values.append(state_val)
-
-            return action.detach().cpu().numpy().flatten()
-        else:
-            with torch.no_grad():
-                state = torch.FloatTensor(state).to(device)
-                action, action_logprob, state_val = self.policy_old.act(state)
-
-            self.buffer.states.append(state)
-            self.buffer.actions.append(action)
-            self.buffer.logprobs.append(action_logprob)
-            self.buffer.state_values.append(state_val)
-
-            if self.is_multi_discrete:
+    def select_action(self, state, deterministic=False):
+        """
+        Adapted, only allowed multidiscrete actions
+        """
+        with torch.no_grad():
+            state = torch.FloatTensor(state).to(device)
+            if deterministic:
+                action = self.policy_old.act_deterministic(state)
                 return action.detach().cpu().numpy()
             else:
-                return action.item()
+                action, action_logprob, state_val = self.policy_old.act(state)
+
+        self.buffer.states.append(state)
+        self.buffer.actions.append(action)
+        self.buffer.logprobs.append(action_logprob)
+        self.buffer.state_values.append(state_val)
+        return action.detach().cpu().numpy()
 
     def update(self):
         # Monte Carlo estimate of returns

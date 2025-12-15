@@ -2,6 +2,7 @@
 __pycache__/
 demo/results/
 hrlmamlenv/
-demo/logs/
+demo/
 *DELETE*
 .env
+*.DS_Store

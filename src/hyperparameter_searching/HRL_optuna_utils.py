@@ -112,11 +112,6 @@ class hyperparams_opt_HRL:
         )
 
     def objective(self, trial: optuna.Trial):
-        """gamma = trial.suggest_float("gamma", 0.98, 0.999, log=True)
-        max_grad_norm = trial.suggest_float("max_grad_norm", 0.3, 5, log=True)
-        n_steps = trial.suggest_categorical("n_steps", [32, 64, 128, 256])
-        learning_rate = trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True)
-        ent_coef = trial.suggest_float("ent_coef", 1e-5, 0.01, log=True)"""
 
         lr_actor_M = trial.suggest_float("lr_actor_M", 5e-5, 1e-3, log=True)
         lr_critic_M = trial.suggest_float("lr_critic_M", 5e-5, 1e-3, log=True)

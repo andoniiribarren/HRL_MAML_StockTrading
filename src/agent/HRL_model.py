@@ -55,9 +55,6 @@ class HRLAgent:
             gamma=self.manager_kwargs["gamma"],
             K_epochs=self.manager_kwargs["K_epochs"],
             eps_clip=self.manager_kwargs["eps_clip"],
-            has_continuous_action_space=False,
-            action_std_init=None,
-            is_multi_discrete=True,
         )
 
         self.worker = DDPG(
@@ -131,7 +128,9 @@ class HRLAgent:
                 obs_W_raw = obs["worker"]
 
                 # Acciones del MANAGER
-                actions_M_raw = self.manager.select_action(obs_M)
+                actions_M_raw = self.manager.select_action(
+                    obs_M, deterministic=freeze_M
+                )
 
                 # Generar obs para el WORKER
                 actions_M = actions_M_raw - 1
@@ -198,12 +197,11 @@ class HRLAgent:
                 ###### Guardar en buffers ######
                 # Manager
                 # saving reward and is_terminals
-                self.manager.buffer.rewards.append(reward_M)
-                self.manager.buffer.is_terminals.append(done)
-                current_ep_reward_manager += reward_M
-
                 # Entrenar manager si toca
                 if not freeze_M:
+                    self.manager.buffer.rewards.append(reward_M)
+                    self.manager.buffer.is_terminals.append(done)
+                    current_ep_reward_manager += reward_M
                     self.manager_timestep += 1
                     if self.manager_timestep % manager_update_timestep == 0:
                         self.manager.update()
@@ -295,7 +293,7 @@ class HRLAgent:
             # ACCIÓN DEL MANAGER
             obs_M = obs["manager"]
 
-            action_M_raw = self.manager.select_action(obs_M)
+            action_M_raw = self.manager.select_action(obs_M, deterministic=True)
 
             if isinstance(action_M_raw, np.ndarray):
                 action_M = action_M_raw - 1
@@ -326,4 +324,4 @@ class HRLAgent:
                     break
 
             obs = next_obs
-        return account_memory, actions_memory, last_state
+        return account_memory, actions_memory, last_state["full_state"]

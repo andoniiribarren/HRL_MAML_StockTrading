@@ -3,6 +3,9 @@ import json
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator
+from sklearn.base import TransformerMixin
+from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, StandardScaler
 from stockstats import StockDataFrame as Sdf
 import yfinance as yf
 
@@ -187,6 +190,71 @@ class FeatureEngineer:
         return df
 
 
+class GroupByScaler(BaseEstimator, TransformerMixin):
+    """Sklearn-like scaler that scales considering groups of data.
+
+    In the financial setting, this scale can be used to normalize a DataFrame
+    with time series of multiple tickers. The scaler will fit and transform
+    data for each ticker independently.
+    """
+
+    def __init__(self, by, scaler=MaxAbsScaler, columns=None, scaler_kwargs=None):
+        """Initializes GoupBy scaler.
+
+        Args:
+            by: Name of column that will be used to group.
+            scaler: Scikit-learn scaler class to be used.
+            columns: List of columns that will be scaled.
+            scaler_kwargs: Keyword arguments for chosen scaler.
+        """
+        self.scalers = {}  # dictionary with scalers
+        self.by = by
+        self.scaler = scaler
+        self.columns = columns
+        self.scaler_kwargs = {} if scaler_kwargs is None else scaler_kwargs
+
+    def fit(self, X, y=None):
+        """Fits the scaler to input data.
+
+        Args:
+            X: DataFrame to fit.
+            y: Not used.
+
+        Returns:
+            Fitted GroupBy scaler.
+        """
+        # if columns aren't specified, considered all numeric columns
+        if self.columns is None:
+            self.columns = X.select_dtypes(exclude=["object"]).columns
+        # fit one scaler for each group
+        for value in X[self.by].unique():
+            X_group = X.loc[X[self.by] == value, self.columns]
+            self.scalers[value] = self.scaler(**self.scaler_kwargs).fit(X_group)
+        return self
+
+    def transform(self, X, y=None):
+        """Transforms unscaled data.
+
+        Args:
+            X: DataFrame to transform.
+            y: Not used.
+
+        Returns:
+            Transformed DataFrame.
+        """
+        # apply scaler for each group
+        X = X.copy()
+        if "close" in X.columns:
+            X["close_raw"] = X["close"].copy()
+
+        for value in X[self.by].unique():
+            select_mask = X[self.by] == value
+            X.loc[select_mask, self.columns] = self.scalers[value].transform(
+                X.loc[select_mask, self.columns]
+            )
+        return X
+
+
 def get_df(start, end, json_path="tickers/ticker_lists.json"):
     with open(json_path, "r") as f:
         data = json.load(f)
@@ -211,7 +279,19 @@ def get_df(start, end, json_path="tickers/ticker_lists.json"):
     processed = processed.replace(np.inf, 0)
     processed = processed[processed.date >= start].reset_index(drop=True)
 
-    df_res = processed[processed.date < end]
+    processed = processed.drop(columns=["open", "high", "low", "volume"])
+
+    scale_columns = ["close"] + settings.INDICATORS
+
+    scaler = GroupByScaler(
+        by="tic",
+        scaler=StandardScaler,
+        columns=scale_columns,
+    )
+    scaler.fit(processed)
+    processed2 = scaler.transform(processed)
+
+    df_res = processed2[processed2.date < end]
     df_res["dayorder"] = df_res["date"].astype("category").cat.codes
 
     return df_res

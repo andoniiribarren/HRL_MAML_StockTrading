@@ -106,6 +106,7 @@ class StockTradingEnvHRL(gym.Env):
         self.model_name = model_name
         self.mode = mode
         self.iteration = iteration
+        self.SHARE_SCALE = 2000
         # initalize state
         self.state = self._initiate_state()
 
@@ -130,41 +131,38 @@ class StockTradingEnvHRL(gym.Env):
         self.date_memory = [self._get_date()]
         #         self.logger = Logger('results',[CSVOutputFormat])
         # self.reset()
+
         self._seed()
 
     def _sell_stock(self, index, action):
         def _do_sell_normal():
-            if (
-                self.state["full_state"][index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to sell
-                if self.state["full_state"][index + self.stock_dim + 1] > 0:
-                    # Sell only if current asset is > 0
-                    sell_num_shares = min(
-                        abs(action),
-                        self.state["full_state"][index + self.stock_dim + 1],
-                    )
-                    sell_amount = (
-                        self.state["full_state"][index + 1]
-                        * sell_num_shares
-                        * (1 - self.sell_cost_pct[index])
-                    )
-                    # update balance
-                    self.state["full_state"][0] += sell_amount
-                    self.state["worker"][0] += sell_amount
 
-                    # Update number of stocks
-                    self.state["full_state"][
-                        index + self.stock_dim + 1
-                    ] -= sell_num_shares
-                    self.state["worker"][index + self.stock_dim + 1] -= sell_num_shares
-                    self.cost += (
-                        self.state["full_state"][index + 1]
-                        * sell_num_shares
-                        * self.sell_cost_pct[index]
-                    )
-                    self.trades += 1
-                else:
-                    sell_num_shares = 0
+            if self.state["full_state"][index + self.stock_dim + 1] > 0:
+                # Sell only if current asset is > 0
+                sell_num_shares = min(
+                    abs(action),
+                    self.state["full_state"][index + self.stock_dim + 1],
+                )
+                sell_amount = (
+                    self.state["full_state"][index + 1]
+                    * sell_num_shares
+                    * (1 - self.sell_cost_pct[index])
+                )
+                # update balance
+                self.state["full_state"][0] += sell_amount
+                self.state["worker"][0] += sell_amount / self.initial_amount
+
+                # Update number of stocks
+                self.state["full_state"][index + self.stock_dim + 1] -= sell_num_shares
+                self.state["worker"][index + self.stock_dim + 1] -= (
+                    sell_num_shares / self.SHARE_SCALE
+                )
+                self.cost += (
+                    self.state["full_state"][index + 1]
+                    * sell_num_shares
+                    * self.sell_cost_pct[index]
+                )
+                self.trades += 1
             else:
                 sell_num_shares = 0
 
@@ -177,35 +175,32 @@ class StockTradingEnvHRL(gym.Env):
 
     def _buy_stock(self, index, action):
         def _do_buy():
-            if (
-                self.state["full_state"][index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to buy
-                available_amount = self.state["full_state"][0] // (
-                    self.state["full_state"][index + 1] * (1 + self.buy_cost_pct[index])
-                )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
-                # print('available_amount:{}'.format(available_amount))
+            available_amount = self.state["full_state"][0] // (
+                self.state["full_state"][index + 1] * (1 + self.buy_cost_pct[index])
+            )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
+            # print('available_amount:{}'.format(available_amount))
 
-                # update balance
-                buy_num_shares = min(available_amount, action)
-                buy_amount = (
-                    self.state["full_state"][index + 1]
-                    * buy_num_shares
-                    * (1 + self.buy_cost_pct[index])
-                )
-                self.state["full_state"][0] -= buy_amount
-                self.state["worker"][0] -= buy_amount
+            # update balance
+            buy_num_shares = min(available_amount, action)
+            buy_amount = (
+                self.state["full_state"][index + 1]
+                * buy_num_shares
+                * (1 + self.buy_cost_pct[index])
+            )
+            self.state["full_state"][0] -= buy_amount
+            self.state["worker"][0] -= buy_amount / self.initial_amount
 
-                self.state["full_state"][index + self.stock_dim + 1] += buy_num_shares
-                self.state["worker"][index + self.stock_dim + 1] += buy_num_shares
+            self.state["full_state"][index + self.stock_dim + 1] += buy_num_shares
+            self.state["worker"][index + self.stock_dim + 1] += (
+                buy_num_shares / self.SHARE_SCALE
+            )
 
-                self.cost += (
-                    self.state["full_state"][index + 1]
-                    * buy_num_shares
-                    * self.buy_cost_pct[index]
-                )
-                self.trades += 1
-            else:
-                buy_num_shares = 0
+            self.cost += (
+                self.state["full_state"][index + 1]
+                * buy_num_shares
+                * self.buy_cost_pct[index]
+            )
+            self.trades += 1
 
             return buy_num_shares
 
@@ -242,6 +237,7 @@ class StockTradingEnvHRL(gym.Env):
         self.terminal = self.day >= self.df["dayorder"].nunique() - 1
         if self.terminal:
             # print(f"Episode: {self.episode}")
+            # print("DEBUG 1: ", self.state)
             if self.make_plots:
                 self._make_plot()
             end_total_asset = self.state["full_state"][0] + sum(
@@ -330,7 +326,7 @@ class StockTradingEnvHRL(gym.Env):
                 self.terminal,
                 False,
                 {},
-            )  # TODO ALIGNMENT REWARD
+            )
 
         else:
             actions = actions * self.hmax  # actions initially is scaled between 0 to 1
@@ -455,7 +451,7 @@ class StockTradingEnvHRL(gym.Env):
                 state = {
                     "full_state": (
                         [self.initial_amount]  # balance inicial
-                        + self.data.close.values.tolist()  # Close prices i
+                        + self.data.close_raw.values.tolist()  # Close prices i
                         + self.num_stock_shares  # stock shares i
                         + sum(
                             (
@@ -473,9 +469,9 @@ class StockTradingEnvHRL(gym.Env):
                         ),
                         [],
                     ),
-                    "worker": [self.initial_amount]
+                    "worker": [self.initial_amount / self.initial_amount]
                     + self.data.close.values.tolist()
-                    + self.num_stock_shares
+                    + [s / self.SHARE_SCALE for s in self.num_stock_shares]
                     + [0] * self.stock_dim,
                 }
 
@@ -491,7 +487,7 @@ class StockTradingEnvHRL(gym.Env):
                 state = {
                     "full_state": (
                         [self.previous_state["full_state"][0]]
-                        + self.data.close.values.tolist()
+                        + self.data.close_raw.values.tolist()
                         + self.previous_state["full_state"][
                             (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
                         ]
@@ -514,9 +510,9 @@ class StockTradingEnvHRL(gym.Env):
                         )
                     ),
                     "worker": (
-                        [self.previous_state["full_state"][0]]
+                        [self.previous_state["worker"][0]]
                         + self.data.close.values.tolist()
-                        + self.previous_state["full_state"][
+                        + self.previous_state["worker"][
                             (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
                         ]
                         + self.previous_state["worker"][
@@ -537,7 +533,7 @@ class StockTradingEnvHRL(gym.Env):
             state = {
                 "full_state": (
                     [self.state["full_state"][0]]
-                    + self.data.close.values.tolist()
+                    + self.data.close_raw.values.tolist()
                     + list(
                         self.state["full_state"][
                             (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
@@ -562,10 +558,10 @@ class StockTradingEnvHRL(gym.Env):
                     )
                 ),
                 "worker": (
-                    [self.state["full_state"][0]]
+                    [self.state["worker"][0]]
                     + self.data.close.values.tolist()
                     + list(
-                        self.state["full_state"][
+                        self.state["worker"][
                             (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
                         ]
                     )

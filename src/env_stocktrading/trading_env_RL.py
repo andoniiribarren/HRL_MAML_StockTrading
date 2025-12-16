@@ -102,34 +102,24 @@ class StockTradingEnv(gym.Env):
 
     def _sell_stock(self, index, action):
         def _do_sell_normal():
-            if (
-                self.state[index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to sell, for simlicity we just add it in techical index
-                # if self.state[index + 1] > 0: # if we use price<0 to denote a stock is unable to trade in that day, the total asset calculation may be wrong for the price is unreasonable
-                # Sell only if the price is > 0 (no missing data in this particular date)
-                # perform sell action based on the sign of the action
-                if self.state[index + self.stock_dim + 1] > 0:
-                    # Sell only if current asset is > 0
-                    sell_num_shares = min(
-                        abs(action), self.state[index + self.stock_dim + 1]
-                    )
-                    sell_amount = (
-                        self.state[index + 1]
-                        * sell_num_shares
-                        * (1 - self.sell_cost_pct[index])
-                    )
-                    # update balance
-                    self.state[0] += sell_amount
+            if self.state[index + self.stock_dim + 1] > 0:
+                # Sell only if current asset is > 0
+                sell_num_shares = min(
+                    abs(action), self.state[index + self.stock_dim + 1]
+                )
+                sell_amount = (
+                    self.state[index + 1]
+                    * sell_num_shares
+                    * (1 - self.sell_cost_pct[index])
+                )
+                # update balance
+                self.state[0] += sell_amount
 
-                    self.state[index + self.stock_dim + 1] -= sell_num_shares
-                    self.cost += (
-                        self.state[index + 1]
-                        * sell_num_shares
-                        * self.sell_cost_pct[index]
-                    )
-                    self.trades += 1
-                else:
-                    sell_num_shares = 0
+                self.state[index + self.stock_dim + 1] -= sell_num_shares
+                self.cost += (
+                    self.state[index + 1] * sell_num_shares * self.sell_cost_pct[index]
+                )
+                self.trades += 1
             else:
                 sell_num_shares = 0
 
@@ -142,33 +132,24 @@ class StockTradingEnv(gym.Env):
 
     def _buy_stock(self, index, action):
         def _do_buy():
-            if (
-                self.state[index + 2 * self.stock_dim + 1] != True
-            ):  # check if the stock is able to buy
-                # if self.state[index + 1] >0:
-                # Buy only if the price is > 0 (no missing data in this particular date)
-                available_amount = self.state[0] // (
-                    self.state[index + 1] * (1 + self.buy_cost_pct[index])
-                )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
-                # print('available_amount:{}'.format(available_amount))
+            available_amount = self.state[0] // (
+                self.state[index + 1] * (1 + self.buy_cost_pct[index])
+            )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
+            # print('available_amount:{}'.format(available_amount))
 
-                # update balance
-                buy_num_shares = min(available_amount, action)
-                buy_amount = (
-                    self.state[index + 1]
-                    * buy_num_shares
-                    * (1 + self.buy_cost_pct[index])
-                )
-                self.state[0] -= buy_amount
+            # update balance
+            buy_num_shares = min(available_amount, action)
+            buy_amount = (
+                self.state[index + 1] * buy_num_shares * (1 + self.buy_cost_pct[index])
+            )
+            self.state[0] -= buy_amount
 
-                self.state[index + self.stock_dim + 1] += buy_num_shares
+            self.state[index + self.stock_dim + 1] += buy_num_shares
 
-                self.cost += (
-                    self.state[index + 1] * buy_num_shares * self.buy_cost_pct[index]
-                )
-                self.trades += 1
-            else:
-                buy_num_shares = 0
+            self.cost += (
+                self.state[index + 1] * buy_num_shares * self.buy_cost_pct[index]
+            )
+            self.trades += 1
 
             return buy_num_shares
 

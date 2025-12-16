@@ -8,61 +8,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(ROOT)
 
 import optuna
-import json
 import pandas as pd
-import numpy as np
-import datetime
 
 
-from preprocess.preprocessor import YahooDownloader
-from preprocess.preprocessor import FeatureEngineer
 from src.env_stocktrading.trading_env_HRL import StockTradingEnvHRL
 from src.agent.HRL_model import HRLAgent
-
-
-def get_dfs():
-    with open("src/preprocess/tickers/ticker_lists.json", "r") as f:
-        data = json.load(f)
-
-    dow_30 = data["DOW_30"]
-    cryptos = data["CRYPTO_7"]
-
-    TRAIN_START_DATE = "2017-01-01"
-    TRAIN_END_DATE = "2022-01-01"
-    TEST_START_DATE = "2022-01-01"
-    TEST_END_DATE = "2023-01-01"
-
-    df = YahooDownloader(
-        start_date=pd.to_datetime(TRAIN_START_DATE) - datetime.timedelta(days=30),
-        end_date=TEST_END_DATE,
-        ticker_list=dow_30,
-    ).fetch_data()
-
-    INDICATORS = ["macd", "rsi_30", "cci_30"]
-
-    fe = FeatureEngineer(
-        use_technical_indicator=True,
-        tech_indicator_list=INDICATORS,
-        use_turbulence=False,
-        user_defined_feature=False,
-    )
-
-    processed = fe.preprocess_data(df)
-    processed = processed.copy()
-    processed = processed.fillna(0)
-    processed = processed.replace(np.inf, 0)
-
-    processed = processed[processed.date >= TRAIN_START_DATE].reset_index(drop=True)
-
-    stock_dimension = len(processed.tic.unique())
-
-    df_train = processed[processed.date < TEST_START_DATE]
-    df_test = processed[processed.date >= TEST_START_DATE]
-
-    df_train["dayorder"] = df_train["date"].astype("category").cat.codes
-    df_test["dayorder"] = df_test["date"].astype("category").cat.codes
-
-    return df_train, df_test, stock_dimension, INDICATORS
 
 
 class hyperparams_opt_HRL:
@@ -80,8 +30,6 @@ class hyperparams_opt_HRL:
         self.df_test = df_test
 
         self.stock_dimension = len(self.df_train.tic.unique())
-        # DF generation
-        # self.df_train, self.df_test, self.stock_dimension = self.generate_data()
 
         self.episode_len = self.df_train.dayorder.nunique()
 
@@ -142,14 +90,14 @@ class hyperparams_opt_HRL:
             "buffer_size": buffer_size,
             "batch_size": batch_size,
             "gamma": gamma_W,
-            "verbose": 1,
+            "verbose": 0,
         }
 
         train_env = self.make_env(self.df_train)
         test_env = self.make_env(self.df_test)
 
-        initial_manager_episodes = 12
-        initial_worker_episodes = 10
+        initial_manager_episodes = 17
+        initial_worker_episodes = 13
         initial_cycle_episodes = 4
 
         model = HRLAgent(
@@ -159,14 +107,13 @@ class hyperparams_opt_HRL:
             worker_kwargs=params_worker,
             initial_manager_timesteps=initial_manager_episodes * self.episode_len,
             initial_worker_timesteps=initial_worker_episodes * self.episode_len,
-            n_alt_cycles=4,
+            n_alt_cycles=5,
             initial_cycle_steps=initial_cycle_episodes * self.episode_len,
-            dism_factor=0.9,
         )
 
         trained_model = model.train_HRL_model()
 
-        df_account_value, _ = trained_model.predictHRL(env=test_env)
+        df_account_value, _, _ = trained_model.predictHRL(env=test_env)
 
         return df_account_value.account_value.iloc[-1]
 

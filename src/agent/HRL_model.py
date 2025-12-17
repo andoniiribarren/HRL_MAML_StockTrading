@@ -140,17 +140,16 @@ class HRLAgent:
                     new_obs_worker[-self.stock_dim :] = actions_M
 
                     new_obs_worker_dict = {"worker": new_obs_worker}
-
-                    self.worker.replay_buffer.add(
-                        prev_obs_dict_worker,
-                        new_obs_worker_dict,
-                        actions_W,
-                        reward,
-                        done,
-                        infos=[{}],
-                    )
-                    # Actualizar política de worker si aplica
                     if not freeze_W:
+                        self.worker.replay_buffer.add(
+                            prev_obs_dict_worker,
+                            new_obs_worker_dict,
+                            actions_W,
+                            reward,
+                            done,
+                            infos=[{}],
+                        )
+                        # Actualizar política de worker si aplica
                         if (
                             self.worker.num_timesteps > self.worker.learning_starts
                             and self.worker.replay_buffer.size()

@@ -17,8 +17,8 @@ class MarketTask(Enum):
 
 
 class MetaTrainHelper:
-    def __init__(self):
-
+    def __init__(self, json_path="tickers/ticker_lists.json"):
+        self.json_path = json_path
         # Mercado bajista
         self.task1 = {
             "title": "Bearish",
@@ -41,13 +41,19 @@ class MetaTrainHelper:
         }
 
         df_t1 = get_df(
-            start=self.task1["time_frame_start"], end=self.task1["time_frame_end"]
+            start=self.task1["time_frame_start"],
+            end=self.task1["time_frame_end"],
+            json_path=self.json_path,
         )
         df_t2 = get_df(
-            start=self.task2["time_frame_start"], end=self.task2["time_frame_end"]
+            start=self.task2["time_frame_start"],
+            end=self.task2["time_frame_end"],
+            json_path=self.json_path,
         )
         df_t3 = get_df(
-            start=self.task3["time_frame_start"], end=self.task3["time_frame_end"]
+            start=self.task3["time_frame_start"],
+            end=self.task3["time_frame_end"],
+            json_path=self.json_path,
         )
 
         self.task1["df_train"] = df_t1

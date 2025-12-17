@@ -126,7 +126,7 @@ class hyperparams_opt_RL:
             total_timesteps=self.n_episodes_train * self.episode_len,
         )
 
-        df_account_value, _ = baseRLAgent.predict_RL(
+        df_account_value, _, _ = baseRLAgent.predict_RL(
             model=trained_model, environment=test_env
         )
 

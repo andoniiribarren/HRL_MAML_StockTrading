@@ -22,14 +22,33 @@ class TrainSettings:
 
         # Model Parameters
         self.best_hiperparams_RL = {
+            "gamma": 0.9821228839394213,
+            "max_grad_norm": 0.3658938553514915,
+            "n_steps": 32,
+            "learning_rate": 0.00010213234993276823,
+            "ent_coef": 0.00022181492106438205,
+        }
+
+        self.best_hiperparams_HRL = {
+            "lr_actor_M": 6.47969222684225e-05,
+            "lr_critic_M": 0.0009779265083900554,
+            "gamma_M": 0.9804091986624366,
+            "update_timestep": 2048,
+            "gamma_W": 0.9821774808050912,
+            "lr_W": 0.0049433022367945285,
+            "buffer_size": 100000,
+            "batch_size": 256,
+        }
+
+        """self.best_hiperparams_RL_OLD = {
             "gamma": 0.9982572049354244,
             "max_grad_norm": 1.004287538508153,
             "n_steps": 256,
             "learning_rate": 0.0002750235733375285,
             "ent_coef": 6.465134048701665e-05,
-        }
+        }"""
 
-        self.best_hiperparams_HRL = {
+        """self.best_hiperparams_HRL_OLD = {
             "lr_actor_M": 0.00020620848037307665,
             "lr_critic_M": 0.0003374572067862167,
             "gamma_M": 0.9927862051428868,
@@ -38,4 +57,4 @@ class TrainSettings:
             "lr_W": 0.0005967276028261235,
             "buffer_size": 100000,
             "batch_size": 256,
-        }
+        }"""

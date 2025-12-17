@@ -75,7 +75,8 @@ class StockTradingEnv(gym.Env):
         self.mode = mode
         self.iteration = iteration
         # initalize state
-        self.state = self._initiate_state()
+        self.SHARE_SCALE = 2000
+        self.state, self.state_raw = self._initiate_state()
 
         # initialize reward
         self.reward = 0
@@ -87,7 +88,7 @@ class StockTradingEnv(gym.Env):
             self.initial_amount
             + np.sum(
                 np.array(self.num_stock_shares)
-                * np.array(self.state[1 : 1 + self.stock_dim])
+                * np.array(self.state_raw[1 : 1 + self.stock_dim])
             )
         ]  # the initial total asset is calculated by cash + sum (num_share_stock_i * price_stock_i)
         self.rewards_memory = []
@@ -102,22 +103,29 @@ class StockTradingEnv(gym.Env):
 
     def _sell_stock(self, index, action):
         def _do_sell_normal():
-            if self.state[index + self.stock_dim + 1] > 0:
+            if self.state_raw[index + self.stock_dim + 1] > 0:
                 # Sell only if current asset is > 0
                 sell_num_shares = min(
-                    abs(action), self.state[index + self.stock_dim + 1]
+                    abs(action), self.state_raw[index + self.stock_dim + 1]
                 )
                 sell_amount = (
-                    self.state[index + 1]
+                    self.state_raw[index + 1]
                     * sell_num_shares
                     * (1 - self.sell_cost_pct[index])
                 )
                 # update balance
-                self.state[0] += sell_amount
+                self.state_raw[0] += sell_amount
+                self.state[0] += sell_amount / self.initial_amount
 
-                self.state[index + self.stock_dim + 1] -= sell_num_shares
+                self.state_raw[index + self.stock_dim + 1] -= sell_num_shares
+                self.state[index + self.stock_dim + 1] -= (
+                    sell_num_shares / self.SHARE_SCALE
+                )
+
                 self.cost += (
-                    self.state[index + 1] * sell_num_shares * self.sell_cost_pct[index]
+                    self.state_raw[index + 1]
+                    * sell_num_shares
+                    * self.sell_cost_pct[index]
                 )
                 self.trades += 1
             else:
@@ -132,19 +140,24 @@ class StockTradingEnv(gym.Env):
 
     def _buy_stock(self, index, action):
         def _do_buy():
-            available_amount = self.state[0] // (
-                self.state[index + 1] * (1 + self.buy_cost_pct[index])
+            available_amount = self.state_raw[0] // (
+                self.state_raw[index + 1] * (1 + self.buy_cost_pct[index])
             )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
             # print('available_amount:{}'.format(available_amount))
 
             # update balance
             buy_num_shares = min(available_amount, action)
             buy_amount = (
-                self.state[index + 1] * buy_num_shares * (1 + self.buy_cost_pct[index])
+                self.state_raw[index + 1]
+                * buy_num_shares
+                * (1 + self.buy_cost_pct[index])
             )
-            self.state[0] -= buy_amount
 
-            self.state[index + self.stock_dim + 1] += buy_num_shares
+            self.state_raw[0] -= buy_amount
+            self.state[0] -= buy_amount / self.initial_amount
+
+            self.state_raw[index + self.stock_dim + 1] += buy_num_shares
+            self.state[index + self.stock_dim + 1] += buy_num_shares / self.SHARE_SCALE
 
             self.cost += (
                 self.state[index + 1] * buy_num_shares * self.buy_cost_pct[index]
@@ -188,17 +201,19 @@ class StockTradingEnv(gym.Env):
             # print(f"Episode: {self.episode}")
             if self.make_plots:
                 self._make_plot()
-            end_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state_raw[0] + sum(
+                np.array(self.state_raw[1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state_raw[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                )
             )
             df_total_value = pd.DataFrame(self.asset_memory)
             tot_reward = (
-                self.state[0]
+                self.state_raw[0]
                 + sum(
-                    np.array(self.state[1 : (self.stock_dim + 1)])
+                    np.array(self.state_raw[1 : (self.stock_dim + 1)])
                     * np.array(
-                        self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                        self.state_raw[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
                     )
                 )
                 - self.asset_memory[0]
@@ -269,9 +284,11 @@ class StockTradingEnv(gym.Env):
             actions = actions.astype(
                 int
             )  # convert into integer because we can't by fraction of shares
-            begin_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            begin_total_asset = self.state_raw[0] + sum(
+                np.array(self.state_raw[1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state_raw[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                )
             )
             # print("begin_total_asset:{}".format(begin_total_asset))
 
@@ -296,11 +313,13 @@ class StockTradingEnv(gym.Env):
             # state: s -> s+1
             self.day += 1
             self.data = self.df[self.df.dayorder == self.day]
-            self.state = self._update_state()
+            self.state, self.state_raw = self._update_state()
 
-            end_total_asset = self.state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
-                * np.array(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+            end_total_asset = self.state_raw[0] + sum(
+                np.array(self.state_raw[1 : (self.stock_dim + 1)])
+                * np.array(
+                    self.state_raw[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
+                )
             )
 
             self.asset_memory.append(end_total_asset)
@@ -310,7 +329,7 @@ class StockTradingEnv(gym.Env):
             self.rewards_memory.append(self.reward)
             # UPDATED self.reward = self.reward * self.reward_scaling
             self.state_memory.append(
-                self.state
+                self.state_raw
             )  # add current state in state_recorder for each step
 
         return self.state, self.reward, self.terminal, False, {}
@@ -324,19 +343,19 @@ class StockTradingEnv(gym.Env):
         # initiate state
         self.day = 0
         self.data = self.df[self.df.dayorder == self.day]
-        self.state = self._initiate_state()
+        self.state, self.state_raw = self._initiate_state()
 
         if self.initial:
             self.asset_memory = [
                 self.initial_amount
                 + np.sum(
                     np.array(self.num_stock_shares)
-                    * np.array(self.state[1 : 1 + self.stock_dim])
+                    * np.array(self.state_raw[1 : 1 + self.stock_dim])
                 )
             ]
         else:
             previous_total_asset = self.previous_state[0] + sum(
-                np.array(self.state[1 : (self.stock_dim + 1)])
+                np.array(self.state_raw[1 : (self.stock_dim + 1)])
                 * np.array(
                     self.previous_state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)]
                 )
@@ -364,9 +383,9 @@ class StockTradingEnv(gym.Env):
             if len(self.df.tic.unique()) > 1:
                 # for multiple stock
                 state = (
-                    [self.initial_amount]
+                    [self.initial_amount / self.initial_amount]
                     + self.data.close.values.tolist()
-                    + self.num_stock_shares
+                    + [s / self.SHARE_SCALE for s in self.num_stock_shares]
                     + sum(
                         (
                             self.data[tech].values.tolist()
@@ -375,16 +394,26 @@ class StockTradingEnv(gym.Env):
                         [],
                     )
                 )  # [balance, close prices_i, stock_shares_i, MACD_i, rsi30_i, cci30_i, dx30_i, turbulences_i]
-            else:
-                # for single stock
-                state = (
+
+                state_raw = (
                     [self.initial_amount]
-                    + [self.data.close]
-                    + [0] * self.stock_dim
-                    + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
+                    + self.data.close_raw.values.tolist()
+                    + self.num_stock_shares
+                    + sum(
+                        (
+                            self.data[tech].values.tolist()
+                            for tech in self.tech_indicator_list
+                        ),
+                        [],
+                    )
+                )
+
+            else:
+                raise ValueError(
+                    "No implemented for single stock. Please, select more than one ticker."
                 )
         else:
-            # Using Previous State
+            """# Using Previous State
             if len(self.df.tic.unique()) > 1:
                 # for multiple stock
                 state = (
@@ -403,15 +432,11 @@ class StockTradingEnv(gym.Env):
                 )
             else:
                 # for single stock
-                state = (
-                    [self.previous_state[0]]
-                    + [self.data.close]
-                    + self.previous_state[
-                        (self.stock_dim + 1) : (self.stock_dim * 2 + 1)
-                    ]
-                    + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
-                )
-        return state
+                raise ValueError(
+                    "No implemented for single stock. Please, select more than one ticker."
+                )"""
+            raise ValueError("Not implemented")
+        return state, state_raw
 
     def _update_state(self):
         if len(self.df.tic.unique()) > 1:
@@ -429,16 +454,26 @@ class StockTradingEnv(gym.Env):
                 )
             )
 
-        else:
-            # for single stock
-            state = (
-                [self.state[0]]
-                + [self.data.close]
-                + list(self.state[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
-                + sum(([self.data[tech]] for tech in self.tech_indicator_list), [])
+            state_raw = (
+                [self.state_raw[0]]
+                + self.data.close_raw.values.tolist()
+                + list(self.state_raw[(self.stock_dim + 1) : (self.stock_dim * 2 + 1)])
+                + sum(
+                    (
+                        self.data[tech].values.tolist()
+                        for tech in self.tech_indicator_list
+                    ),
+                    [],
+                )
             )
 
-        return state
+        else:
+            # for single stock
+            raise ValueError(
+                "No implemented for single stock. Please, select more than one ticker."
+            )
+
+        return state, state_raw
 
     def _get_date(self):
         if len(self.df.tic.unique()) > 1:

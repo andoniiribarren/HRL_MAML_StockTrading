@@ -3,7 +3,13 @@ import pandas as pd
 import numpy as np
 
 
-def plot_portfolio_evolution(df_list, label_list, title="Comparison"):
+def plot_portfolio_evolution(
+    df_list: list[pd.DataFrame],
+    label_list: list[str],
+    title: str = "Comparison",
+    save: bool = False,
+    filename: str = "plot_test",
+):
 
     plt.figure(figsize=(12, 6))
 
@@ -15,13 +21,15 @@ def plot_portfolio_evolution(df_list, label_list, title="Comparison"):
         plt.plot(data_to_plot, label=label, linewidth=2, color=color, alpha=0.9)
 
     plt.title(title, fontsize=16)
-    plt.xlabel("Tiempo (Pasos / Fecha)", fontsize=12)
-    plt.ylabel("Valor de la Cartera ($)", fontsize=12)
+    plt.xlabel("Date", fontsize=12)
+    plt.ylabel("Portfolio value ($)", fontsize=12)
     plt.legend(loc="upper left", fontsize=10)
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
     plt.show()
-    # plt.savefig("test_plot.png")
+    if save:
+        file_name_ext = filename + ".png"
+        plt.savefig(file_name_ext)
 
 
 def calculate_portfolio_metrics(df_account, final_asset_state, risk_free_rate=0.0):

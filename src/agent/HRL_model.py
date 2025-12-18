@@ -1,4 +1,5 @@
 from stable_baselines3 import DDPG
+from stable_baselines3.common.noise import NormalActionNoise
 from agent.PPO import PPO
 import gymnasium as gym
 from gymnasium import spaces
@@ -57,9 +58,14 @@ class HRLAgent:
             eps_clip=self.manager_kwargs["eps_clip"],
         )
 
+        # Meter action_noise
+        n = self.env.action_space.shape[0]
+        action_noise = NormalActionNoise(mean=np.zeros(n), sigma=0.1*np.ones(n))
         self.worker = DDPG(
             policy="MultiInputPolicy",
             env=self.env_W,
+            learning_starts=10000,
+            action_noise=action_noise,
             **self.worker_kwargs,
         )
 

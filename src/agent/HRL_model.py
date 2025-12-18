@@ -60,7 +60,7 @@ class HRLAgent:
 
         # Meter action_noise
         n = self.env.action_space.shape[0]
-        action_noise = NormalActionNoise(mean=np.zeros(n), sigma=0.1*np.ones(n))
+        action_noise = NormalActionNoise(mean=np.zeros(n), sigma=0.15*np.ones(n))
         self.worker = DDPG(
             policy="MultiInputPolicy",
             env=self.env_W,

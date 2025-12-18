@@ -1,4 +1,5 @@
-import os
+import copy
+
 import numpy as np
 import torch
 from stable_baselines3 import PPO
@@ -42,7 +43,10 @@ class MetaHRLAgent(HRLAgent):
                 print(f"Task {task}, Meta Epoch: {iteration}")
                 task_env = self.task_helper.create_env(task)
 
-                agent_clone = deepcopy(self)
+                # agent_clone = deepcopy(self)
+                agent_clone = copy.copy(self)
+                agent_clone.manager = copy.deepcopy(self.manager)
+
                 agent_clone.env = task_env
                 agent_clone.manager.buffer.clear()
 

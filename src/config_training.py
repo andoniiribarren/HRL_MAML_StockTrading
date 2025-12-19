@@ -40,6 +40,17 @@ class TrainSettings:
             "batch_size": 256,
         }
 
+        self.best_hiperparams_HRL_worker_update = {
+            "lr_actor_M": 9.983191097311975e-05,
+            "lr_critic_M": 0.00010619402195438779,
+            "gamma_M": 0.9885350911070342,
+            "update_timestep": 256,
+            "gamma_W": 0.9907625270566711,
+            "lr_W": 0.0029447794714302458,
+            "buffer_size": 40000,
+            "batch_size": 256,
+        }
+
         """self.best_hiperparams_RL_OLD = {
             "gamma": 0.9982572049354244,
             "max_grad_norm": 1.004287538508153,

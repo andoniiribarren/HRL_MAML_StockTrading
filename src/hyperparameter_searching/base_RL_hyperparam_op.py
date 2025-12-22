@@ -1,25 +1,15 @@
 import warnings
 
-warnings.filterwarnings("ignore")
-
-import sys, os
-
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.append(ROOT)
-
 import optuna
-import json
 import pandas as pd
-import numpy as np
-import datetime
-
 
 from agent.base_RL_models import baseRLAgent
 from src.env_stocktrading.trading_env_RL import StockTradingEnv
-from src.preprocess.preprocessor import FeatureEngineer, YahooDownloader
+
+warnings.filterwarnings("ignore")
 
 
-class hyperparams_opt_RL:
+class HyperparamsOptRL:
     def __init__(
         self,
         df_train: pd.DataFrame,
@@ -36,48 +26,8 @@ class hyperparams_opt_RL:
         self.df_test = df_test
 
         self.stock_dimension = len(self.df_train.tic.unique())
-        # DF generation
-        # self.df_train, self.df_test, self.stock_dimension = self.generate_data()
 
         self.episode_len = self.df_train.dayorder.nunique()
-
-    """def generate_data(self):
-
-        json_path = os.path.join(ROOT, "finHRL", "preprocess", "tickers", "ticker_lists.json")
-
-        with open(json_path, "r") as f:
-            data = json.load(f)
-
-        if self.portfolio not in ["DOW_30", "CRYPTO_7"]:
-            raise ValueError(f"The value '{self.portfolio}' is not permited. Portfolio possible values are 'DOW_30' or 'CRYPTO_7'.")
-
-        tickers = data[self.portfolio]
-
-        df = YahooDownloader(start_date = pd.to_datetime(self.train_start_date) - datetime.timedelta(days=30),
-                        end_date = self.test_end_date,
-                        ticker_list = tickers).fetch_data()
-
-        fe = FeatureEngineer(use_technical_indicator=True,
-                        tech_indicator_list = self.indicators,
-                        use_turbulence=False,
-                        user_defined_feature = False)
-
-        processed = fe.preprocess_data(df)
-        processed = processed.copy()
-        processed = processed.fillna(0)
-        processed = processed.replace(np.inf,0)
-
-        processed = processed[processed.date >= self.train_start_date].reset_index(drop=True)
-
-        stock_dimension = len(processed.tic.unique())
-
-        df_train = processed[processed.date < self.test_start_date]
-        df_test = processed[processed.date >= self.test_start_date]
-
-        df_train["dayorder"] = df_train["date"].astype("category").cat.codes
-        df_test["dayorder"] = df_test["date"].astype("category").cat.codes
-
-        return df_train, df_test, stock_dimension"""
 
     def make_env(self, df: pd.DataFrame) -> StockTradingEnv:
         state_space = (

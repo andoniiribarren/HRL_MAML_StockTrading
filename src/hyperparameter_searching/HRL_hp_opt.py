@@ -3,7 +3,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from preprocess.preprocessor import get_df
-from hyperparameter_searching.HRL_optuna_utils import hyperparams_opt_HRL
+from hyperparameter_searching.HRL_optuna_utils import HyperparamsOptHRL
 
 from config_training import TrainSettings
 
@@ -26,7 +26,7 @@ df_val = get_df(
 )
 
 
-hrl_opt = hyperparams_opt_HRL(
+hrl_opt = HyperparamsOptHRL(
     df_train=df_train, df_test=df_val, indicators=INDICATORS, n_trials=N_TRIALS
 )
 hrl_opt.run_opt()

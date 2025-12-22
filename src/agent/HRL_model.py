@@ -8,10 +8,6 @@ import numpy as np
 import math
 import torch as th
 
-# obs_space = [balance, close prices_i, stock_shares_i, MACD_i, rsi30_i, cci30_i] --> 1 + stock_dim * 5
-# obs_space_manager = [close prices_i, MACD_i, rsi30_i, cci30_i]
-# obs_space_worker = [balance, close_prices_i, stock_shares_i, manager_actions_i]
-
 
 class HRLAgent:
 
@@ -58,9 +54,9 @@ class HRLAgent:
             eps_clip=self.manager_kwargs["eps_clip"],
         )
 
-        # Meter action_noise
+        # DDPG action_noise
         n = self.env.action_space.shape[0]
-        action_noise = NormalActionNoise(mean=np.zeros(n), sigma=0.15 * np.ones(n))
+        action_noise = NormalActionNoise(mean=np.zeros(n), sigma=0.1 * np.ones(n))
         self.worker = DDPG(
             policy="MultiInputPolicy",
             env=self.env_W,
@@ -124,24 +120,25 @@ class HRLAgent:
 
             for t in range(1, self.max_ep_len + 1):
 
-                """if self.num_timesteps % 100 == 0:
-                print(f"Paso total número: {self.num_timesteps}")
-                print(f"Paso de este train número: {num_train_timesteps}")
-                print(f"Worker timesteps: {self.worker.num_timesteps}")
-                print(f"manager timesteps: {self.manager_timestep}\n")"""
-                # Separar observaciones
+                # if self.num_timesteps % 100 == 0:
+                # print(f"Paso total número: {self.num_timesteps}")
+                # print(f"Paso de este train número: {num_train_timesteps}")
+                # print(f"Worker timesteps: {self.worker.num_timesteps}")
+                # print(f"manager timesteps: {self.manager_timestep}\n")
+
+                # Split obs
                 obs_M = obs["manager"]
                 obs_W_raw = obs["worker"]
 
-                # Acciones del MANAGER
+                # MANAGER actions
                 actions_M_raw = self.manager.select_action(
                     obs_M, deterministic=freeze_M
                 )
 
-                # Generar obs para el WORKER
+                # Create worker obs
                 actions_M = actions_M_raw - 1
 
-                # WORKER: Actualizar anterior buffer y política del worker porque necesitábamos new_ibs
+                # Worker: update previous steps buffer because manager actions needed
                 if num_train_timesteps > 0:
                     new_obs_worker[-self.stock_dim :] = actions_M
 
@@ -155,7 +152,6 @@ class HRLAgent:
                             done,
                             infos=[{}],
                         )
-                        # Actualizar política de worker si aplica
                         if (
                             self.worker.num_timesteps > self.worker.learning_starts
                             and self.worker.replay_buffer.size()
@@ -199,10 +195,7 @@ class HRLAgent:
                 num_train_timesteps += 1
                 self.num_timesteps += 1
 
-                ###### Guardar en buffers ######
-                # Manager
-                # saving reward and is_terminals
-                # Entrenar manager si toca
+                # Manager, saving reward and is_terminals, train if applies
                 if not freeze_M:
                     self.manager.buffer.rewards.append(reward_M)
                     self.manager.buffer.is_terminals.append(done)
@@ -225,7 +218,6 @@ class HRLAgent:
 
     def ph1_manager_training(self):
         print("Starting Phase 1: Only train Manager")
-        # Aquí al comienzo usa sólo alignment
         self.manager.policy.train()
         self.trainHRL(
             total_timesteps=self.initial_manager_timesteps,
@@ -239,7 +231,6 @@ class HRLAgent:
 
     def ph2_worker_training(self):
         print("Starting Phase 2: Only train Worker")
-        # Congelar parámetros del manager y entrenar con ellos
         self.manager.policy.eval()
         self.trainHRL(
             total_timesteps=self.initial_worker_timesteps,
@@ -295,9 +286,7 @@ class HRLAgent:
         self.manager.policy.eval()
 
         for i in range(max_steps + 1):
-            # ACCIÓN DEL MANAGER
             obs_M = obs["manager"]
-
             action_M_raw = self.manager.select_action(obs_M, deterministic=True)
 
             if isinstance(action_M_raw, np.ndarray):
@@ -317,7 +306,7 @@ class HRLAgent:
             combined_action = action_M * action_W
             next_obs, reward, done, _, info = env.step(combined_action)
 
-            # GUARDAR RESULTADOS
+            # Save results
             if i == max_steps - 1 or done:
                 print("Retrieving memory from env...")
                 account_memory = env.save_asset_memory()

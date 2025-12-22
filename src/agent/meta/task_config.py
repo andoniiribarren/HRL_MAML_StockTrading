@@ -1,10 +1,5 @@
-import datetime
-import json
 from enum import Enum
 import random
-
-import numpy as np
-import pandas as pd
 
 from env_stocktrading.trading_env_HRL import StockTradingEnvHRL
 from preprocess.preprocessor import get_df
@@ -19,21 +14,21 @@ class MarketTask(Enum):
 class MetaTrainHelper:
     def __init__(self, json_path="tickers/ticker_lists.json"):
         self.json_path = json_path
-        # Mercado bajista
+        # Bearish market
         self.task1 = {
             "title": "Bearish",
             "time_frame_start": "2022-01-01",
             "time_frame_end": "2023-01-01",
         }
 
-        # Mercado alcista
+        # Bullish market
         self.task2 = {
             "title": "Bullish",
             "time_frame_start": "2018-01-01",
             "time_frame_end": "2020-01-01",
         }
 
-        # Mercado estancado
+        # Stagnant market
         self.task3 = {
             "title": "Stagnant",
             "time_frame_start": "2015-01-01",

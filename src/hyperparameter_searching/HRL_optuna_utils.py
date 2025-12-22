@@ -1,21 +1,15 @@
 import warnings
 
-warnings.filterwarnings("ignore")
-
-import sys, os
-
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.append(ROOT)
-
 import optuna
 import pandas as pd
-
 
 from src.env_stocktrading.trading_env_HRL import StockTradingEnvHRL
 from src.agent.HRL_model import HRLAgent
 
+warnings.filterwarnings("ignore")
 
-class hyperparams_opt_HRL:
+
+class HyperparamsOptHRL:
     def __init__(
         self,
         df_train: pd.DataFrame,

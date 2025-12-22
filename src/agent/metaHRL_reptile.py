@@ -1,10 +1,6 @@
 import copy
 
-import numpy as np
 import torch
-from stable_baselines3 import PPO
-from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
 from agent.meta.task_config import MetaTrainHelper
 from agent.HRL_model import HRLAgent
 
@@ -29,10 +25,10 @@ class MetaHRLAgent(HRLAgent):
 
         for iteration in range(meta_epochs):
 
-            # Guardar theta
+            # Save theta
             current_meta_state = self.manager.policy.state_dict()
 
-            # Inicializar acumulador de pesos
+            # Initialize weight cumulator
             sum_adapted_weights = {
                 k: torch.zeros_like(v) for k, v in current_meta_state.items()
             }
@@ -43,7 +39,6 @@ class MetaHRLAgent(HRLAgent):
                 print(f"Task {task}, Meta Epoch: {iteration}")
                 task_env = self.task_helper.create_env(task)
 
-                # agent_clone = deepcopy(self)
                 agent_clone = copy.copy(self)
                 agent_clone.manager = copy.deepcopy(self.manager)
 
@@ -69,27 +64,24 @@ class MetaHRLAgent(HRLAgent):
 
             avg_weights = {k: v / len(tasks) for k, v in sum_adapted_weights.items()}
 
-            # Actualización Reptile: New = Old + Beta * (Avg - Old)
+            # Reptile update: New = Old + Beta * (Avg - Old)
             new_meta_state = {}
 
             for key in current_meta_state:
                 direction = avg_weights[key] - current_meta_state[key]
                 new_meta_state[key] = current_meta_state[key] + meta_lr * direction
 
-            # Poner en los pesos del agente
+            # Load into agent's weights
             self.manager.policy.load_state_dict(new_meta_state)
             self.manager.policy_old.load_state_dict(new_meta_state)
 
             if (iteration + 1) % 5 == 0:
                 print(f"  > Meta-Epoch {iteration+1}/{meta_epochs} completada.")
 
+    # Rewrite affected training phases
     def ph1_manager_training(self):
         print("\n=== Phase 1: Meta-Training Manager ===")
-        # En lugar de trainHRL, llamamos a Reptile
-        # Convertimos tus timesteps iniciales a épocas aproximadas
-        steps_per_epoch = (
-            self.manager_kwargs.get("update_timestep", 2048) * 3
-        )  # Aprox por batch
+        steps_per_epoch = self.manager_kwargs.get("update_timestep", 2048) * 3
         n_epochs = max(5, int(self.initial_manager_timesteps / steps_per_epoch))
 
         self.meta_train_manager(
@@ -111,7 +103,6 @@ class MetaHRLAgent(HRLAgent):
                 meta_epochs=epochs_cycle, meta_batch_size=3, meta_lr=0.001
             )
 
-            # 2. Turno Worker (STANDARD)
             self.trainHRL(
                 total_timesteps=steps_cycle,
                 reset_timesteps=False,

@@ -47,7 +47,7 @@ class baseRLAgent:
         tb_log_name,
         total_timesteps=5000,
         callbacks: type[BaseCallback] = None,
-    ):  # this function is static method, so it can be called without creating an instance of the class
+    ):
         model = model.learn(
             total_timesteps=total_timesteps,
             tb_log_name=tb_log_name,

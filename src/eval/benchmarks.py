@@ -1,8 +1,5 @@
 import pandas as pd
 import numpy as np
-from pypfopt import risk_models
-from pypfopt import expected_returns
-from pypfopt import EfficientFrontier
 
 
 def get_buyhold_df(

@@ -1,11 +1,36 @@
-*trading_environment_PEC.py
+# Python
 __pycache__/
-demo/results/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+hrlenv/
 hrlmamlenv/
-demo/logs
-demo/results
+.venv/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+
+# Project-specific
+*trading_environment_PEC.py
+*DELETE*
+TREE.txt
+demo/logs/
+demo/results/
 demo/test_demo_HRL.py
 demo/test_demo_metaHRL.py
-*DELETE*
-.env
-*.DS_Store
+trained_models/
+datasets/
+logs/

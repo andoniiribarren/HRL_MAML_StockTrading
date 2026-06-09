@@ -1,8 +1,8 @@
 from enum import Enum
 import random
 
-from env_stocktrading.trading_env_HRL import StockTradingEnvHRL
-from preprocess.preprocessor import get_df
+from src.env_stocktrading.trading_env_hrl import StockTradingEnvHRL
+from src.preprocess.preprocessor import get_df
 
 
 class MarketTask(Enum):
@@ -12,7 +12,12 @@ class MarketTask(Enum):
 
 
 class MetaTrainHelper:
-    def __init__(self, json_path="tickers/ticker_lists.json"):
+    def __init__(
+        self,
+        tickerlist: str = "DOW_30_red",
+        json_path="tickers/ticker_lists.json",
+    ):
+        self.tickerlist = tickerlist
         self.json_path = json_path
         # Bearish market
         self.task1 = {
@@ -38,16 +43,19 @@ class MetaTrainHelper:
         df_t1 = get_df(
             start=self.task1["time_frame_start"],
             end=self.task1["time_frame_end"],
+            tickerlist=self.tickerlist,
             json_path=self.json_path,
         )
         df_t2 = get_df(
             start=self.task2["time_frame_start"],
             end=self.task2["time_frame_end"],
+            tickerlist=self.tickerlist,
             json_path=self.json_path,
         )
         df_t3 = get_df(
             start=self.task3["time_frame_start"],
             end=self.task3["time_frame_end"],
+            tickerlist=self.tickerlist,
             json_path=self.json_path,
         )
 

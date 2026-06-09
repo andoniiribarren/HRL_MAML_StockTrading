@@ -41,20 +41,20 @@ class StockTradingEnvHRL(gym.Env):
         action_space: int,
         tech_indicator_list: list[str],
         make_plots: bool = False,
-        print_verbosity=10,
-        day=0,
-        initial=True,
-        previous_state=[],
-        model_name="",
-        mode="",
-        iteration="",
+        print_verbosity: int = 10,
+        day: int = 0,
+        initial: bool = True,
+        previous_state=None,
+        model_name: str = "",
+        mode: str = "",
+        iteration: str = "",
     ):
         self.day = day
         self.df = df
         self.stock_dim = stock_dim
         self.hmax = hmax
         self.num_stock_shares = num_stock_shares
-        self.initial_amount = initial_amount  # get the initial cash
+        self.initial_amount = initial_amount
         self.buy_cost_pct = buy_cost_pct
         self.sell_cost_pct = sell_cost_pct
         self.state_space_M = state_space_M
@@ -100,7 +100,7 @@ class StockTradingEnvHRL(gym.Env):
         self.make_plots = make_plots
         self.print_verbosity = print_verbosity
         self.initial = initial
-        self.previous_state = previous_state
+        self.previous_state = {} if previous_state is None else previous_state
         self.model_name = model_name
         self.mode = mode
         self.iteration = iteration
@@ -175,8 +175,7 @@ class StockTradingEnvHRL(gym.Env):
         def _do_buy():
             available_amount = self.state["full_state"][0] // (
                 self.state["full_state"][index + 1] * (1 + self.buy_cost_pct[index])
-            )  # when buying stocks, we should consider the cost of trading when calculating available_amount, or we may be have cash<0
-            # print('available_amount:{}'.format(available_amount))
+            )
 
             # update balance
             buy_num_shares = min(available_amount, action)
@@ -351,9 +350,28 @@ class StockTradingEnvHRL(gym.Env):
                 # print(f'take sell action after : {actions[index]}')
                 # print(f"Num shares after: {self.state[index+self.stock_dim+1]}")
 
+            # Calculate if 'stocks_to_buy * price > remaining_cash'
+            total_cost = 0
             for index in buy_index:
-                # print('take buy action: {}'.format(actions[index]))
-                actions[index] = self._buy_stock(index, actions[index])
+                total_cost += (
+                    self.state["full_state"][index + 1]
+                    * (1 + self.buy_cost_pct[index])
+                    * actions[index]
+                )
+
+            if (
+                total_cost > self.state["full_state"][0]
+                and self.state["full_state"][0] > 0
+            ):
+                factor = self.state["full_state"][0] / total_cost
+                for index in buy_index:
+                    # print('take buy action: {}'.format(actions[index]))
+                    actions[index] = self._buy_stock(index, factor * actions[index])
+
+            else:
+                for index in buy_index:
+                    # print('take buy action: {}'.format(actions[index]))
+                    actions[index] = self._buy_stock(index, actions[index])
 
             self.actions_memory.append(actions)
             # print(actions)

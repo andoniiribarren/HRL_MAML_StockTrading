@@ -43,7 +43,7 @@ class StockTradingEnv(gym.Env):
         print_verbosity=10,
         day=0,
         initial=True,
-        previous_state=[],
+        previous_state=None,
         model_name="",
         mode="",
         iteration="",
@@ -70,7 +70,7 @@ class StockTradingEnv(gym.Env):
         self.make_plots = make_plots
         self.print_verbosity = print_verbosity
         self.initial = initial
-        self.previous_state = previous_state
+        self.previous_state = [] if previous_state is None else previous_state
         self.model_name = model_name
         self.mode = mode
         self.iteration = iteration

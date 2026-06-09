@@ -1,5 +1,5 @@
 {
-    "DOW_30" : [
+    "DOW_30": [
         "AXP",
         "AMGN",
         "AAPL",
@@ -31,8 +31,19 @@
         "DIS",
         "SHW"
     ],
-
-    "CRYPTO_7" : [
+    "DOW_30_red": [
+        "AAPL",
+        "IBM",
+        "NVDA",
+        "KO",
+        "MSFT",
+        "NKE",
+        "PG",
+        "CRM",
+        "AMZN",
+        "WMT"
+    ],
+    "CRYPTO_7": [
         "BTC-USD",
         "ETH-USD",
         "BNB-USD",
@@ -41,5 +52,4 @@
         "ADA-USD",
         "DOGE-USD"
     ]
-    
 }

@@ -1,5 +1,6 @@
 import datetime
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, StandardScaler
 from stockstats import StockDataFrame as Sdf
 import yfinance as yf
 
-from config_training import TrainSettings
+from src.config_training import TrainSettings
 
 settings = TrainSettings()
 
@@ -255,17 +256,26 @@ class GroupByScaler(BaseEstimator, TransformerMixin):
         return X
 
 
-def get_df(start, end, json_path="tickers/ticker_lists.json"):
-    with open(json_path, "r") as f:
+def _resolve_json_path(json_path: str) -> Path:
+    p = Path(json_path)
+    if p.is_absolute():
+        return p
+    # Resolve relative to this module so notebooks/scripts can run from any CWD.
+    return (Path(__file__).resolve().parent / p).resolve()
+
+
+def get_df(start, end, tickerlist, json_path="tickers/ticker_lists.json"):
+    json_file = _resolve_json_path(json_path)
+    with open(json_file, "r") as f:
         data = json.load(f)
 
-    dow_30 = data["DOW_30"]
+    tickers = data[tickerlist]
     # cryptos = data["CRYPTO_7"]
 
     df = YahooDownloader(
         start_date=pd.to_datetime(start) - datetime.timedelta(days=30),
         end_date=end,
-        ticker_list=dow_30,
+        ticker_list=tickers,
     ).fetch_data()
 
     fe = FeatureEngineer(

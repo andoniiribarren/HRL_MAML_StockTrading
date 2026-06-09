@@ -3,8 +3,8 @@ import warnings
 import optuna
 import pandas as pd
 
-from agent.base_RL_models import baseRLAgent
-from src.env_stocktrading.trading_env_RL import StockTradingEnv
+from src.agent.base_rl_models import baseRLAgent
+from src.env_stocktrading.trading_env_rl import StockTradingEnv
 
 warnings.filterwarnings("ignore")
 

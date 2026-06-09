@@ -2,10 +2,10 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-from preprocess.preprocessor import get_df
-from hyperparameter_searching.HRL_optuna_utils import HyperparamsOptHRL
+from src.preprocess.preprocessor import get_df
+from src.hpopt.hrl_optuna_utils import HyperparamsOptHRL
 
-from config_training import TrainSettings
+from src.config_training import TrainSettings
 
 settings = TrainSettings()
 
@@ -16,13 +16,19 @@ VAL_END_DATE = settings.VAL_END_DATE
 
 INDICATORS = settings.INDICATORS
 
+tickerlist = "DOW_30_red"
+
 N_TRIALS = 40
 
 df_train = get_df(
-    TRAIN_START_DATE, TRAIN_END_DATE, "../src/preprocess/tickers/ticker_lists.json"
+    start=TRAIN_START_DATE,
+    end=TRAIN_END_DATE,
+    tickerlist=tickerlist,
 )
 df_val = get_df(
-    VAL_START_DATE, VAL_END_DATE, "../src/preprocess/tickers/ticker_lists.json"
+    start=VAL_START_DATE,
+    end=VAL_END_DATE,
+    tickerlist=tickerlist,
 )
 
 

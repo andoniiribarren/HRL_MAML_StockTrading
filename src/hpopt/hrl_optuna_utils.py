@@ -3,8 +3,8 @@ import warnings
 import optuna
 import pandas as pd
 
-from src.env_stocktrading.trading_env_HRL import StockTradingEnvHRL
-from src.agent.HRL_model import HRLAgent
+from src.env_stocktrading.trading_env_hrl import StockTradingEnvHRL
+from src.agent.hrl_model import HRLAgent
 
 warnings.filterwarnings("ignore")
 

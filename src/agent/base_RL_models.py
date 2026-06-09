@@ -5,6 +5,7 @@ from stable_baselines3 import SAC
 from stable_baselines3 import TD3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.callbacks import CallbackList
+from typing import Any, Callable
 
 MODELS = {"a2c": A2C, "ddpg": DDPG, "td3": TD3, "sac": SAC, "ppo": PPO}
 
@@ -28,34 +29,66 @@ class baseRLAgent:
         if model_name not in MODELS:
             raise ValueError(f"Model '{model_name}' not found in MODELS.")
 
+        common_kwargs = {
+            "policy": policy,
+            "env": self.env,
+            "learning_rate": learning_rate,
+            "gamma": gamma,
+            "verbose": verbose,
+            "seed": seed,
+            "tensorboard_log": "./logs/",
+        }
+
+        # A2C/PPO expose rollout-specific parameters that off-policy algorithms do not.
+        rollout_kwargs = {}
+        if model_name in {"a2c", "ppo"}:
+            rollout_kwargs = {
+                "max_grad_norm": max_grad_norm,
+                "n_steps": n_steps,
+                "ent_coef": ent_coef,
+            }
+
         return MODELS[model_name](
-            policy=policy,
-            env=self.env,
-            learning_rate=learning_rate,
-            gamma=gamma,
-            max_grad_norm=max_grad_norm,
-            n_steps=n_steps,
-            ent_coef=ent_coef,
-            verbose=verbose,
-            seed=seed,
-            tensorboard_log="./logs/",
+            **common_kwargs,
+            **rollout_kwargs,
         )
+
+    @staticmethod
+    def _build_callback(callbacks):
+        if callbacks is None:
+            return None
+
+        if isinstance(callbacks, BaseCallback):
+            return callbacks
+
+        if callable(callbacks):
+            return callbacks
+
+        callback_list = [callback for callback in callbacks if callback is not None]
+        if not callback_list:
+            return None
+        if len(callback_list) == 1:
+            return callback_list[0]
+
+        return CallbackList(callback_list)
 
     @staticmethod
     def train_model(
         model: A2C | PPO | DDPG | TD3 | SAC,
         tb_log_name,
         total_timesteps=5000,
-        callbacks: type[BaseCallback] = None,
+        callbacks: (
+            BaseCallback
+            | list[BaseCallback]
+            | tuple[BaseCallback, ...]
+            | Callable[[dict[str, Any], dict[str, Any]], bool]
+            | None
+        ) = None,
     ):
         model = model.learn(
             total_timesteps=total_timesteps,
             tb_log_name=tb_log_name,
-            callback=(
-                CallbackList([callback for callback in callbacks])
-                if callbacks is not None
-                else None
-            ),
+            callback=baseRLAgent._build_callback(callbacks),
         )
         return model
 

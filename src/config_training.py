@@ -1,71 +1,42 @@
+from pathlib import Path
+
+import yaml
+
+_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "configs"
+
+
+def _load_yaml(name: str) -> dict:
+    with open(_CONFIGS_DIR / name, "r") as f:
+        return yaml.safe_load(f)
+
+
 class TrainSettings:
     def __init__(self):
+        defaults = _load_yaml("defaults.yaml")
+        hp = _load_yaml("best_hyperparams.yaml")
 
-        # directory
-        self.DATA_SAVE_DIR = "datasets"
-        self.TRAINED_MODEL_DIR = "trained_models"
-        self.TENSORBOARD_LOG_DIR = "tensorboard_log"
-        self.RESULTS_DIR = "results"
+        # Directories
+        dirs = defaults["directories"]
+        self.DATA_SAVE_DIR = dirs["data_save"]
+        self.TRAINED_MODEL_DIR = dirs["trained_models"]
+        self.TENSORBOARD_LOG_DIR = dirs["tensorboard_log"]
+        self.RESULTS_DIR = dirs["results"]
 
-        # date format: '%Y-%m-%d'
-        self.TRAIN_START_DATE = "2018-01-01"
-        self.TRAIN_END_DATE = "2022-01-01"
-        self.VAL_START_DATE = "2022-01-01"
-        self.VAL_END_DATE = "2023-01-01"
+        # Date ranges
+        dates = defaults["dates"]
+        self.TRAIN_START_DATE = dates["train_start"]
+        self.TRAIN_END_DATE = dates["train_end"]
+        self.VAL_START_DATE = dates["val_start"]
+        self.VAL_END_DATE = dates["val_end"]
+        self.TEST23_START_DATE = dates["test23_start"]
+        self.TEST23_END_DATE = dates["test23_end"]
+        self.TEST24_START_DATE = dates["test24_start"]
+        self.TEST24_END_DATE = dates["test24_end"]
 
-        self.TEST23_START_DATE = "2023-01-01"
-        self.TEST23_END_DATE = "2024-01-01"
-        self.TEST24_START_DATE = "2024-01-01"
-        self.TEST24_END_DATE = "2025-01-01"
+        # Technical indicators
+        self.INDICATORS = defaults["indicators"]
 
-        self.INDICATORS = ["macd", "rsi_30", "cci_30"]
-
-        # Model Parameters
-        self.best_hiperparams_RL = {
-            "gamma": 0.9821228839394213,
-            "max_grad_norm": 0.3658938553514915,
-            "n_steps": 32,
-            "learning_rate": 0.00010213234993276823,
-            "ent_coef": 0.00022181492106438205,
-        }
-
-        self.best_hiperparams_HRL = {
-            "lr_actor_M": 6.47969222684225e-05,
-            "lr_critic_M": 0.0009779265083900554,
-            "gamma_M": 0.9804091986624366,
-            "update_timestep": 2048,
-            "gamma_W": 0.9821774808050912,
-            "lr_W": 0.0049433022367945285,
-            "buffer_size": 100000,
-            "batch_size": 256,
-        }
-
-        self.best_hiperparams_HRL_worker_update = {
-            "lr_actor_M": 9.983191097311975e-05,
-            "lr_critic_M": 0.00010619402195438779,
-            "gamma_M": 0.9885350911070342,
-            "update_timestep": 256,
-            "gamma_W": 0.9907625270566711,
-            "lr_W": 0.0029447794714302458,
-            "buffer_size": 40000,
-            "batch_size": 256,
-        }
-
-        """self.best_hiperparams_RL_OLD = {
-            "gamma": 0.9982572049354244,
-            "max_grad_norm": 1.004287538508153,
-            "n_steps": 256,
-            "learning_rate": 0.0002750235733375285,
-            "ent_coef": 6.465134048701665e-05,
-        }"""
-
-        """self.best_hiperparams_HRL_OLD = {
-            "lr_actor_M": 0.00020620848037307665,
-            "lr_critic_M": 0.0003374572067862167,
-            "gamma_M": 0.9927862051428868,
-            "update_timestep": 256,
-            "gamma_W": 0.9953330246893773,
-            "lr_W": 0.0005967276028261235,
-            "buffer_size": 100000,
-            "batch_size": 256,
-        }"""
+        # Best hyperparameters
+        self.best_hiperparams_RL = hp["rl_baseline"]
+        self.best_hiperparams_HRL = hp["hrl"]
+        self.best_hiperparams_HRL_worker_update = hp["hrl_worker_update"]

@@ -1,0 +1,23 @@
+# ── Directory layout ──────────────────────────────────────
+directories:
+  data_save: datasets
+  trained_models: trained_models
+  tensorboard_log: tensorboard_log
+  results: results
+
+# ── Date ranges ──────────────────────────────────────────
+dates:
+  train_start: "2018-01-01"
+  train_end: "2022-01-01"
+  val_start: "2022-01-01"
+  val_end: "2023-01-01"
+  test23_start: "2023-01-01"
+  test23_end: "2024-01-01"
+  test24_start: "2024-01-01"
+  test24_end: "2025-01-01"
+
+# ── Technical indicators ─────────────────────────────────
+indicators:
+  - macd
+  - rsi_30
+  - cci_30

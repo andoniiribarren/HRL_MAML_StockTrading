@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-05-06 23:21:19",
+  "training_time_min": 254.9,
+  "total_timesteps": 473760,
+  "episodes": 470,
+  "hyperparameters": {
+    "manager": {
+      "lr_actor": 6.47969222684225e-05,
+      "lr_critic": 0.0009779265083900554,
+      "gamma": 0.9804091986624366,
+      "K_epochs": 80,
+      "eps_clip": 0.2,
+      "update_timestep": 2048
+    },
+    "worker": {
+      "learning_rate": 0.0049433022367945285,
+      "gamma": 0.9821774808050912,
+      "buffer_size": 100000,
+      "batch_size": 256,
+      "tau": 0.005
+    },
+    "schedule": {
+      "initial_manager_episodes": 30,
+      "initial_worker_episodes": 40,
+      "n_alt_cycles": 20,
+      "cycle_episodes": 10,
+      "episode_len": 1008
+    }
+  },
+  "metrics": {
+    "validation": {
+      "Final Balance ($)": 858308.99,
+      "Cumulative Return (%)": -14.17,
+      "Sharpe Ratio": -0.5182,
+      "Diversification (%)": 83.44,
+      "Active Assets": "126/151",
+      "Max Drawdown (%)": -23.16,
+      "Annual Volatility (%)": 24.12
+    },
+    "test_2023": {
+      "Final Balance ($)": 1223905.89,
+      "Cumulative Return (%)": 22.39,
+      "Sharpe Ratio": 1.5741,
+      "Diversification (%)": 84.11,
+      "Active Assets": "127/151",
+      "Max Drawdown (%)": -12.98,
+      "Annual Volatility (%)": 13.58
+    },
+    "test_2024": {
+      "Final Balance ($)": 1269345.87,
+      "Cumulative Return (%)": 26.93,
+      "Sharpe Ratio": 1.6258,
+      "Diversification (%)": 82.78,
+      "Active Assets": "125/151",
+      "Max Drawdown (%)": -9.26,
+      "Annual Volatility (%)": 15.47
+    }
+  }
+}

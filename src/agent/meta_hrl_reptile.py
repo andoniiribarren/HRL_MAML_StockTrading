@@ -1,8 +1,8 @@
 import copy
 
 import torch
-from agent.meta.task_config import MetaTrainHelper
-from agent.HRL_model import HRLAgent
+from src.agent.meta.task_config import MetaTrainHelper
+from src.agent.hrl_model import HRLAgent
 
 
 class MetaHRLAgent(HRLAgent):
@@ -43,6 +43,7 @@ class MetaHRLAgent(HRLAgent):
                 agent_clone.manager = copy.deepcopy(self.manager)
 
                 agent_clone.env = task_env
+                agent_clone.max_ep_len = len(task_env.df.dayorder.unique())
                 agent_clone.manager.buffer.clear()
 
                 steps_needed = ppo_update_step * inner_epochs

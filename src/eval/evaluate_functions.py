@@ -21,7 +21,7 @@ def plot_portfolio_evolution(
         plt.plot(data_to_plot, label=label, linewidth=2, color=color, alpha=0.9)
 
     plt.title(title, fontsize=16)
-    plt.xlabel("Date", fontsize=12)
+    plt.xlabel("Day", fontsize=12)
     plt.ylabel("Portfolio value ($)", fontsize=12)
     plt.legend(loc="upper left", fontsize=10)
     plt.grid(True, linestyle="--", alpha=0.6)

@@ -384,8 +384,17 @@ class PPO:
         # Copy new weights into old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
 
+        # Capture metrics from last K-epoch iteration
+        update_metrics = {
+            "loss": loss.mean().item(),
+            "entropy": dist_entropy.mean().item(),
+            "ratio": ratios.mean().item(),
+        }
+
         # clear buffer
         self.buffer.clear()
+
+        return update_metrics
 
     def save(self, checkpoint_path):
         torch.save(self.policy_old.state_dict(), checkpoint_path)
